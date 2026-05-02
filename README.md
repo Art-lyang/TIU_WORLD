@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TIU World Game
 
-## Getting Started
+Text-based AI world exploration game for the Turtle Isle Universe.
 
-First, run the development server:
+## Local Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev -- -p 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3001`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local` for local play. Do not commit `.env.local`.
 
-## Learn More
+```env
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5
+OPENAI_FAST_MODEL=
+OPENAI_DEEP_MODEL=
+TIU_ACCESS_PASSWORD=
+TIU_ACCESS_SECRET=
+```
 
-To learn more about Next.js, take a look at the following resources:
+For Vercel, add the same values in Project Settings -> Environment Variables.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`TIU_ACCESS_PASSWORD` is the simple tester password. `TIU_ACCESS_SECRET` is a private cookie-signing secret.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy
 
-## Deploy on Vercel
+Import this repository into Vercel as a Next.js project.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Build command:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```
+
+The app uses local browser storage for player-side state. Server-side session files under `world/session` are ignored because Vercel does not provide durable filesystem storage for runtime data.

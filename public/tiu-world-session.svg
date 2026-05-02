@@ -1,0 +1,27 @@
+<svg width="960" height="540" viewBox="0 0 960 540" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="540" fill="#05070A"/>
+  <path d="M0 74H960M0 148H960M0 222H960M0 296H960M0 370H960M0 444H960M96 0V540M192 0V540M288 0V540M384 0V540M480 0V540M576 0V540M672 0V540M768 0V540M864 0V540" stroke="#16343D" stroke-width="1" opacity=".34"/>
+  <path d="M88 88H360L410 138H872V452H600L546 398H88V88Z" fill="#071116" stroke="#2BE4D0" stroke-width="2" opacity=".9"/>
+  <path d="M122 126H326L368 168H804V414H628L572 358H122V126Z" fill="#0A0B10" stroke="#4B5563" stroke-width="1.5" opacity=".9"/>
+  <path d="M156 160H300L344 204H462L510 252H636L708 324H778" stroke="#22D3EE" stroke-width="4" stroke-linecap="square"/>
+  <path d="M168 330H274L318 286H410L452 244H558L622 180H728" stroke="#FBBF24" stroke-width="3" stroke-linecap="square"/>
+  <path d="M212 238H304L354 288H448L502 342H584" stroke="#A78BFA" stroke-width="3" stroke-linecap="square"/>
+  <path d="M650 126H790V158H650V126ZM676 184H824V216H676V184ZM618 242H778V274H618V242ZM678 300H830V332H678V300ZM626 358H764V390H626V358Z" fill="#101820" stroke="#334155"/>
+  <path d="M164 126V158H122M804 126H770V158M122 414H156V382M804 414V382H770" stroke="#2BE4D0" stroke-width="3"/>
+  <path d="M424 148L474 198L424 248L374 198L424 148Z" fill="#031A19" stroke="#34D399" stroke-width="3"/>
+  <path d="M424 170L452 198L424 226L396 198L424 170Z" fill="#0D9488" opacity=".28"/>
+  <path d="M196 178H228V210H196V178ZM288 266H320V298H288V266ZM432 326H464V358H432V326ZM560 230H592V262H560V230ZM724 154H756V186H724V154Z" fill="#0F172A" stroke="#94A3B8"/>
+  <path d="M214 194H544M304 282H672M448 342H724" stroke="#475569" stroke-dasharray="6 10" opacity=".55"/>
+  <path d="M98 470H862" stroke="#334155" stroke-width="1"/>
+  <path d="M122 488H286M306 488H390M410 488H582M602 488H732M752 488H824" stroke="#34D399" stroke-width="5"/>
+  <path d="M122 506H224M246 506H472M494 506H606M628 506H794" stroke="#38BDF8" stroke-width="2" opacity=".62"/>
+  <rect x="88" y="88" width="784" height="364" fill="url(#scan)" opacity=".2"/>
+  <defs>
+    <linearGradient id="scan" x1="88" y1="88" x2="872" y2="452" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset=".45" stop-color="#34D399"/>
+      <stop offset=".72" stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  
+  <g stroke="currentColor" color="#6CFFAA" stroke-width="5" stroke-linecap="square" stroke-linejoin="miter" filter="url(#softGlow)">
+    <path d="M28 72 V28 H72"/>
+    <path d="M184 28 H228 V72"/>
+    <path d="M228 184 V228 H184"/>
+    <path d="M72 228 H28 V184"/>
+    
+    <circle cx="128" cy="128" r="48"/>
+    <path d="M128 62 V194"/>
+    <path d="M62 128 H194"/>
+    <path d="M128 128 L158 98 L143 143 L98 158 Z" fill="currentColor" stroke="none" opacity="0.85"/>
+    <circle cx="128" cy="128" r="7" fill="currentColor" stroke="none"/>
+
+  </g>
+</svg>
