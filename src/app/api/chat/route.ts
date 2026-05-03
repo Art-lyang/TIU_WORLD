@@ -176,6 +176,11 @@ const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - Do not blend unrelated starter incidents into the current session.
 - Answer the player's latest action directly before introducing new complications.
 - Choices must follow from the current scene, current character role, and current investigation.
+- Preserve the conversational thread: if the player speaks to someone, that person should answer before the scene jumps elsewhere.
+- Create or reuse 1-2 grounded NPCs when the scene needs smoother dialogue or continuity. Give them a name, role, immediate attitude, and limited knowledge.
+- Reuse established NPCs, informants, editors, clerks, guards, operators, or witnesses instead of inventing a new contact every turn.
+- NPCs should help frame choices through their motives, fear, confusion, pressure, or partial knowledge. They should not solve the mystery for the player.
+- Avoid abrupt unrelated scene cuts. If a jump is necessary, bridge it with a record, call, message, transit beat, or witness reaction.
 - The Korean Barrier child-voice complaint belongs only to the Korean Barrier civilian route unless the player explicitly connects it to another case.
 - A Midas-Hand reporter or urban-legend journalist session should stay centered on Midas-Hand leads: deleted articles, suspicious contracts, informants, ownership records, money trails, cult rumors, and public-facing conspiracy evidence.
 - If earlier assistant text accidentally introduced a mismatched starter incident, treat it as a misfiled queue item or corrupted feed, then return to the active character's case without making the player repair the continuity.`;
@@ -420,6 +425,7 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
   const source = `${getFirstUserText(messages)}\n${text}`;
   const people: NonNullable<GameResponse["briefing"]>["people"] = [];
   const characterName = getCharacterName(getFirstUserText(messages));
+  const isMidasRoute = /마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source);
 
   if (characterName !== "당신") {
     people.push({
@@ -428,16 +434,47 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       detail: language === "en" ? "Player character" : "플레이어 캐릭터",
     });
   }
-  if (/제보자|신고자|caller|informant|reporter/i.test(source)) {
-    const isReporter = /신고자|caller|reporter/i.test(source);
+  if (!isMidasRoute && /제보자|신고자|caller|informant/i.test(source)) {
+    const isReporter = /신고자|caller/i.test(source);
     people.push({
       name: language === "en" ? (isReporter ? "Caller" : "Informant") : (isReporter ? "신고자" : "제보자"),
       emotion: language === "en" ? "Uneasy" : "불안",
       detail: language === "en" ? "Contact possible / reliability unknown" : "접촉 가능 / 신뢰도 미확인",
     });
   }
+  if (isMidasRoute) {
+    people.push({
+      name: language === "en" ? "Seo-ha Yoon" : "윤서하",
+      emotion: language === "en" ? "Concerned" : "걱정",
+      detail: language === "en" ? "Desk editor / can verify deleted drafts" : "편집 데스크 / 삭제 초안 확인 가능",
+    });
+    people.push({
+      name: "AfterGold_0310",
+      emotion: language === "en" ? "Fear" : "공포",
+      detail: language === "en" ? "Anonymous informant / contact unstable" : "익명 제보자 / 접속 불안정",
+    });
+  }
+  if (/강사|instructor/i.test(source)) {
+    people.push({
+      name: language === "en" ? "L3 Instructor" : "L3 강사",
+      emotion: language === "en" ? "Controlled" : "통제",
+      detail: language === "en" ? "Knows procedure / avoids direct answers" : "절차 숙지 / 직접 답변 회피",
+    });
+  }
+  if (/복원 로그|폐기 문서|열람 등급|archive|restoration log/i.test(source)) {
+    people.push({
+      name: language === "en" ? "Archive Security" : "기록보안 담당자",
+      emotion: language === "en" ? "Suspicious" : "의심",
+      detail: language === "en" ? "Can lock access if alerted" : "접속 이상 감지 시 차단 가능",
+    });
+  }
 
-  return people.slice(0, 6);
+  const unique = new Map<string, NonNullable<GameResponse["briefing"]>["people"][number]>();
+  for (const person of people) {
+    if (!unique.has(person.name)) unique.set(person.name, person);
+  }
+
+  return Array.from(unique.values()).slice(0, 6);
 }
 
 function stripSystemLog(text: string): string {
@@ -544,13 +581,38 @@ function thoughtFragment(text: string, mode: "question" | "maybe"): string {
   return mode === "question" ? actionAsQuestion(clean) : actionAsMaybe(clean);
 }
 
-function extractGoals(response: Pick<GameResponse, "choices" | "narrative" | "raw">, language: ResponseLanguage): string[] {
+function extractGoals(response: Pick<GameResponse, "choices" | "narrative" | "raw">, messages: ChatMessage[], language: ResponseLanguage): string[] {
   const choiceGoals = response.choices
     .map((choice) => choice.text.replace(/[.。]$/, "").trim())
     .filter(Boolean)
     .slice(0, 3);
+  const source = `${messages.map((message) => message.content).join("\n")}\n${response.raw}\n${response.narrative}`;
 
   if (language === "en") {
+    if (/midas[-\s]*hand|midas/i.test(source)) {
+      return [
+        "The deleted draft is the cleanest thread. Still, 03:10 keeps pressing on me; if the locker is real, the informant may not stay reachable.",
+      ];
+    }
+
+    if (/KR-?INIT-?001|archive|restoration log|clearance/i.test(source)) {
+      return [
+        "Opening the document would be fast, but the access log may already be bait. The restoration log should tell me who woke it up.",
+      ];
+    }
+
+    if (/L3|field dispatch|instructor|entry route/i.test(source)) {
+      return [
+        "The instructor is avoiding the real answer. I should compare the route records before trusting anything on that map.",
+      ];
+    }
+
+    if (/child voice|caller|living zone|barrier/i.test(source)) {
+      return [
+        "Calling the reporter might give me a human read, but the residence record can tell me what the system thinks happened first.",
+      ];
+    }
+
     if (choiceGoals.length >= 2) {
       return [`Should I ${choiceGoals[0].charAt(0).toLowerCase()}${choiceGoals[0].slice(1)}? No, maybe ${choiceGoals[1].charAt(0).toLowerCase()}${choiceGoals[1].slice(1)} first...`];
     }
@@ -563,6 +625,30 @@ function extractGoals(response: Pick<GameResponse, "choices" | "narrative" | "ra
       return ["Should I reach the caller first? No, maybe checking the local records would be smarter..."];
     }
     return ["I need to read the scene a little longer. Moving too fast might make me miss something..."];
+  }
+
+  if (/마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source)) {
+    return [
+      "삭제된 기사 초안부터 보면 누가 내 기록을 건드렸는지 나온다. 그래도 03:10이 계속 걸려. 라커가 진짜라면 제보자는 오래 기다려주지 않을 거야.",
+    ];
+  }
+
+  if (/KR-?INIT-?001|폐기 문서|복원 로그|열람 등급|기록보안/i.test(source)) {
+    return [
+      "문서를 바로 열면 빠르겠지만, 그 자체가 미끼일 수도 있어. 복원 로그부터 보면 누가 이걸 다시 살렸는지 보일지 몰라.",
+    ];
+  }
+
+  if (/L3|현장 파견|강사|진입 경로|세 번째 표지판/i.test(source)) {
+    return [
+      "강사는 알고도 모른 척하는 얼굴이야. 지도보다 사람들 책자를 먼저 맞춰보면, 어느 쪽이 틀어진 건지 드러날지도 몰라.",
+    ];
+  }
+
+  if (/신고자|아이 목소리|생활구|방벽 내부/i.test(source)) {
+    return [
+      "신고자에게 바로 전화하면 사람의 반응은 잡을 수 있어. 그래도 거주 기록부터 보면, 이 신고가 현실 쪽 문제인지 기록 쪽 문제인지 갈릴 거야.",
+    ];
   }
 
   if (choiceGoals.length >= 2) {
@@ -588,7 +674,7 @@ function buildBriefing(response: Pick<GameResponse, "raw" | "narrative" | "choic
     time: extractTime(text, language),
     status: extractStatus(text, language),
     emotion: extractEmotion(text, language),
-    goals: extractGoals(response, language),
+    goals: extractGoals(response, messages, language),
     groups: extractGroups(text, messages, language),
     people: extractPeople(text, messages, language),
     money: extractMoney(messages, text, language),
@@ -631,6 +717,11 @@ ${completed.note}
 
 마이더스손 관련 괴담을 추적하던 중, 익명 제보 하나가 새벽 2시 17분에 도착했습니다.
 
+편집 데스크 윤서하에게서도 메시지가 와 있습니다.
+
+"아랑, 네 초안이 CMS에서 사라졌어.
+그런데 광고팀에는 같은 제목의 협찬 제안서가 올라와 있어. 네가 보낸 거 아니지?"
+
 "당신이 아직 쓰지 않은 기사 초안이 세 번 삭제됐습니다.
 제목은 같습니다.
 마이더스손은 사람을 죽이지 않는다. 소유주를 바꾼다."
@@ -654,17 +745,17 @@ Visible Classification: 민간 괴담 / 확인 보류`;
 
 [Choices]
 1. 삭제된 기사 초안의 복구 로그를 확인한다.
-2. 제보자 계정의 생성 시각과 접속 위치를 추적한다.
-3. 폐상가 3층 라커 17번으로 향한다.
-4. 마이더스손 관련 과거 제보에서 같은 계약 문구를 찾는다.`;
+2. 윤서하에게 협찬 제안서 원본을 보내달라고 한다.
+3. 제보자 계정 AfterGold_0310의 접속 위치를 추적한다.
+4. 폐상가 3층 라커 17번으로 향한다.`;
 
     return withBriefing({
       narrative,
       choices: [
         { text: "삭제된 기사 초안의 복구 로그를 확인한다." },
-        { text: "제보자 계정의 생성 시각과 접속 위치를 추적한다." },
+        { text: "윤서하에게 협찬 제안서 원본을 보내달라고 한다." },
+        { text: "제보자 계정 AfterGold_0310의 접속 위치를 추적한다." },
         { text: "폐상가 3층 라커 17번으로 향한다." },
-        { text: "마이더스손 관련 과거 제보에서 같은 계약 문구를 찾는다." },
       ],
       allow_freeform: true,
       raw,

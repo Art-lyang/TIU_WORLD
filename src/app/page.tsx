@@ -147,8 +147,8 @@ const UI_TEXT = {
       unknown: "미확인",
       groups: "집단",
       noGroups: "아직 드러난 집단 없음",
-      people: "인물",
-      noPeople: "아직 주요 인물 없음",
+      people: "인물 / 대화 상대",
+      noPeople: "아직 대화 상대 없음",
       emotionPrefix: "감정",
       logs: "로그 체크",
     },
@@ -240,8 +240,8 @@ const UI_TEXT = {
       unknown: "Unknown",
       groups: "Groups",
       noGroups: "No revealed groups yet",
-      people: "People",
-      noPeople: "No key people yet",
+      people: "People / Contacts",
+      noPeople: "No active contacts yet",
       emotionPrefix: "Emotion",
       logs: "Log Check",
     },
@@ -924,7 +924,10 @@ function BriefingPanel({
           </div>
         </details>
 
-        <details className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2">
+        <details
+          open={briefing.people.length > 0}
+          className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2"
+        >
           <summary className="cursor-pointer select-none font-medium text-zinc-300">
             {labels.people}
           </summary>
