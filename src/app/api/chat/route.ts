@@ -171,6 +171,14 @@ Do not ask the player whether to remember it. Do not mention memory capture in t
 If nothing important changed, omit [Memory].
 Keep [Choices] as the final section.`;
 
+const OPENING_FLOW_RULE = `Opening Flow Rule:
+- Any start must connect smoothly in this order: player role -> immediate place or device -> human contact or system notice -> first clue -> choices.
+- A new character should not be dropped into an abstract lore explanation. Begin with what they are doing, who contacted them, and why the first clue is their problem.
+- If the player creates a custom character, echo only the useful parts of the character sheet naturally. Do not dump the sheet as a block unless the player wrote it that way.
+- If age, money, or items were auto-filled, mention it briefly as a session calibration note, then move into the scene.
+- Introduce one practical contact when useful: editor, clerk, handler, instructor, dispatcher, guard, witness, or informant. The contact can ask a question, warn the player, or hand over a file.
+- The final choices should feel like the character's next plausible actions, not generic menu commands.`;
+
 const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - Treat the first user message, selected route, character job, player memo, and summary memory as the active session anchor.
 - Do not blend unrelated starter incidents into the current session.
@@ -257,6 +265,13 @@ const STARTER_ROUTE_HINTS = [
   },
 ] as const;
 
+function isStarterRouteCommand(input: string): boolean {
+  const trimmed = input.trim();
+  if (/^START_ROUTE:/i.test(trimmed)) return true;
+  if (/^[1-3](?:[.)])?$/.test(trimmed)) return true;
+  return STARTER_ROUTE_HINTS.some((hint) => trimmed === hint.label);
+}
+
 function detectStarterRoute(input: string): string | null {
   const numericRoute = input.trim().match(/^([1-4])(?:[.)])?$/)?.[1];
   if (numericRoute === "1") return "한국 방벽 내부 민간 조사 보조원";
@@ -301,6 +316,26 @@ function completeCharacterInput(input: string): { character: string; note: strin
       ? `\n\n※ 캐릭터 입력에서 ${added.join(", ")} 정보가 비어 있어 임시 기본값으로 보정했습니다. 원하면 이후 행동으로 수정할 수 있습니다.`
       : "",
   };
+}
+
+function extractCharacterField(character: string, pattern: RegExp): string | null {
+  const match = character.match(pattern);
+  return match?.[1]?.trim().replace(/\s+/g, " ") ?? null;
+}
+
+function buildCharacterIdentityLine(character: string, name: string): string {
+  const rawAge = extractCharacterField(character, /(?:나이|연령|age)\s*[:：]\s*([^/\n]+)/i)
+    ?? character.match(/(\d+\s*(?:세|years?\s*old))/i)?.[1]?.trim()
+    ?? "나이 미확정";
+  const age = /^\d+$/.test(rawAge) ? `${rawAge}세` : rawAge;
+  const job = extractCharacterField(character, /(?:직업(?:\(소속\))?|소속|occupation|job|affiliation)\s*[:：]\s*([^/\n]+)/i)
+    ?? "민간 조사 협력자";
+  const items = extractCharacterField(character, /(?:소지품|장비|items?|equipment|gear)\s*[:：]\s*([^/\n]+)/i)
+    ?? "휴대폰, 신분증, 작은 손전등";
+  const funds = extractCharacterField(character, /(?:소지금|현금|돈|자금|funds?|cash|money)\s*[:：]?\s*([^/\n]+)/i)
+    ?? "50,000원";
+
+  return `${name}. 세션은 당신을 ${age}의 ${job}로 등록합니다. 현재 확인된 소지품은 ${items}, 소지금은 ${funds}입니다.`;
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -442,6 +477,13 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       detail: language === "en" ? "Contact possible / reliability unknown" : "접촉 가능 / 신뢰도 미확인",
     });
   }
+  if (/박민재|민원 접수|방벽 내부|생활구|barrier|living zone/i.test(source)) {
+    people.push({
+      name: language === "en" ? "Min-jae Park" : "박민재",
+      emotion: language === "en" ? "Cautious" : "신중",
+      detail: language === "en" ? "Civil desk senior / knows local procedures" : "민원 접수 선임 / 생활구 절차 숙지",
+    });
+  }
   if (isMidasRoute) {
     people.push({
       name: language === "en" ? "Seo-ha Yoon" : "윤서하",
@@ -461,11 +503,32 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       detail: language === "en" ? "Knows procedure / avoids direct answers" : "절차 숙지 / 직접 답변 회피",
     });
   }
+  if (/임태오|지도 단말기|진입 경로|field support|entry route/i.test(source)) {
+    people.push({
+      name: language === "en" ? "Tae-o Lim" : "임태오",
+      emotion: language === "en" ? "Alert" : "경계",
+      detail: language === "en" ? "Field support operator / monitors route data" : "현장 지원 오퍼레이터 / 경로 데이터 감시",
+    });
+  }
   if (/복원 로그|폐기 문서|열람 등급|archive|restoration log/i.test(source)) {
     people.push({
       name: language === "en" ? "Archive Security" : "기록보안 담당자",
       emotion: language === "en" ? "Suspicious" : "의심",
       detail: language === "en" ? "Can lock access if alerted" : "접속 이상 감지 시 차단 가능",
+    });
+  }
+  if (/오연주|제3기록보존실|색인|기록 관리자/i.test(source)) {
+    people.push({
+      name: language === "en" ? "Yeon-ju Oh" : "오연주",
+      emotion: language === "en" ? "Uneasy" : "불안",
+      detail: language === "en" ? "Archive supervisor / can approve restoration checks" : "기록보존실 감독관 / 복원 확인 승인 가능",
+    });
+  }
+  if (/소바리|Sovari|무전소|산 능선/i.test(source)) {
+    people.push({
+      name: language === "en" ? "Elder Naro" : "나로 노인",
+      emotion: language === "en" ? "Guarded" : "경계",
+      detail: language === "en" ? "Local witness / knows the ridge stories" : "현지 증언자 / 산 능선 전승을 앎",
     });
   }
 
@@ -706,20 +769,19 @@ function buildCustomCharacterOpening(input: string): GameResponse {
   const completed = completeCharacterInput(input);
   const character = completed.character;
   const name = getCharacterName(character);
+  const identityLine = buildCharacterIdentityLine(character, name);
   const briefingMessages: ChatMessage[] = [{ role: "user", content: character }];
 
   if (/기자|취재|괴담|마이더스|midas[-\s]*hand|midas/i.test(character)) {
     const narrative = `[Scene]
-${name}. 당신의 취재 노트 첫 장에는 이렇게 적혀 있습니다.
-
-${character}
+${identityLine}
 ${completed.note}
 
 마이더스손 관련 괴담을 추적하던 중, 익명 제보 하나가 새벽 2시 17분에 도착했습니다.
 
 편집 데스크 윤서하에게서도 메시지가 와 있습니다.
 
-"아랑, 네 초안이 CMS에서 사라졌어.
+"${name}, 네 초안이 CMS에서 사라졌어.
 그런데 광고팀에는 같은 제목의 협찬 제안서가 올라와 있어. 네가 보낸 거 아니지?"
 
 "당신이 아직 쓰지 않은 기사 초안이 세 번 삭제됐습니다.
@@ -762,14 +824,59 @@ Visible Classification: 민간 괴담 / 확인 보류`;
     }, briefingMessages);
   }
 
-  if (/기록|문서|색인|관리|아카이브|자료/i.test(character)) {
+  if (/L3|현장\s*지원|현장\s*파견|지도\s*단말기|field\s*support|field\s*analyst/i.test(character)) {
     const narrative = `[Scene]
-${name}. 당신의 임시 권한 카드에는 아직 정식 직함이 찍히지 않았습니다.
-
-${character}
+${identityLine}
 ${completed.note}
 
-폐기 예정 색인을 검수하던 중, 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타납니다.
+파견 대기실의 전광판에는 당신 이름 대신 임시 호출 부호가 떠 있습니다.
+현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
+
+"네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
+문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
+
+단말기 화면에는 L3 진입 경로가 표시됩니다. 같은 도로가 확대할 때마다 조금씩 다른 위치에 놓이고, 교육 자료 17쪽에는 다른 사람의 필체로 한 줄이 적혀 있습니다.
+
+"세 번째 표지판을 보면 돌아오지 마라."
+
+[State]
+Disclosure Level: RESTRICTED
+Boundary Stability: 흔들림
+Visible Classification: 관찰`;
+
+    const raw = `${narrative}
+
+[Choices]
+1. 임태오에게 경로 변경 로그를 보내달라고 한다.
+2. 교육 자료 17쪽의 필체와 배포 기록을 확인한다.
+3. L3 진입 경로의 이전 버전을 조회한다.
+4. 지도 단말기의 현재 좌표를 사진으로 남긴다.`;
+
+    return withBriefing({
+      narrative,
+      choices: [
+        { text: "임태오에게 경로 변경 로그를 보내달라고 한다." },
+        { text: "교육 자료 17쪽의 필체와 배포 기록을 확인한다." },
+        { text: "L3 진입 경로의 이전 버전을 조회한다." },
+        { text: "지도 단말기의 현재 좌표를 사진으로 남긴다." },
+      ],
+      allow_freeform: true,
+      raw,
+    }, briefingMessages);
+  }
+
+  if (/기록|문서|색인|관리|아카이브|자료/i.test(character)) {
+    const narrative = `[Scene]
+${identityLine}
+${completed.note}
+
+제3기록보존실 출입구에서 임시 권한 카드가 한 박자 늦게 인식됩니다.
+감독관 오연주는 카드 리더기를 한 번 더 확인하고, 목소리를 낮춥니다.
+
+"오늘 네가 맡은 건 폐기 색인 검수야.
+그런데 방금 네 계정으로 복원 요청 하나가 올라왔어. 네가 누른 거 아니지?"
+
+당신의 작업 단말기에는 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타납니다.
 
 KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
@@ -784,7 +891,7 @@ Boundary Stability: 안정`;
     const raw = `${narrative}
 
 [Choices]
-1. 문서 제목을 클릭한다.
+1. 오연주에게 복원 요청자 확인 권한을 요청한다.
 2. 복원 로그를 먼저 확인한다.
 3. 열람 등급 불일치 사유를 조회한다.
 4. 화면을 캡처한 뒤 접속을 끊는다.`;
@@ -792,7 +899,7 @@ Boundary Stability: 안정`;
     return withBriefing({
       narrative,
       choices: [
-        { text: "문서 제목을 클릭한다." },
+        { text: "오연주에게 복원 요청자 확인 권한을 요청한다." },
         { text: "복원 로그를 먼저 확인한다." },
         { text: "열람 등급 불일치 사유를 조회한다." },
         { text: "화면을 캡처한 뒤 접속을 끊는다." },
@@ -802,38 +909,127 @@ Boundary Stability: 안정`;
     }, briefingMessages);
   }
 
-  const narrative = `[Scene]
-${name}. 접속 기록에는 당신이 직접 적은 캐릭터 메모가 남아 있습니다.
-
-${character}
+  if (/방벽|생활구|민원|주민|조사\s*보조|barrier|living\s*zone/i.test(character)) {
+    const narrative = `[Scene]
+${identityLine}
 ${completed.note}
 
-아직 소속과 사건은 확정되지 않았지만, 단말기는 당신에게 가장 낮은 공개 등급의 제보 하나를 배정합니다.
+방벽 내부 제12생활구 민원 접수실은 비에 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
+선임 조사 보조원 박민재가 당신의 단말기에 새 업무를 밀어 넣습니다.
+
+"평범한 민원처럼 보이는데, 자동 분류가 두 번 실패했어.
+신고자는 겁먹었고, 생활구 기록은 이상하게 조용해."
+
+신고 내용은 짧습니다.
 
 "어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
 그 집에는 아이가 없습니다."
 
-제보 위치는 한국 방벽 내부 제12생활구. 기록상 해당 호수는 8년째 공실입니다.
+[State]
+Disclosure Level: PUBLIC
+Boundary Stability: 안정
+Visible Classification: 주민 신고 / 확인 필요`;
+
+    const raw = `${narrative}
+
+[Choices]
+1. 박민재에게 이전 유사 신고가 있었는지 묻는다.
+2. 신고자에게 먼저 전화한다.
+3. 옆집 주소의 거주 기록을 조회한다.
+4. 현장 동행 요청을 넣는다.`;
+
+    return withBriefing({
+      narrative,
+      choices: [
+        { text: "박민재에게 이전 유사 신고가 있었는지 묻는다." },
+        { text: "신고자에게 먼저 전화한다." },
+        { text: "옆집 주소의 거주 기록을 조회한다." },
+        { text: "현장 동행 요청을 넣는다." },
+      ],
+      allow_freeform: true,
+      raw,
+    }, briefingMessages);
+  }
+
+  if (/소바리|sovari|현지\s*협력|무전|산악/i.test(character)) {
+    const narrative = `[Scene]
+${identityLine}
+${completed.note}
+
+소바리 외곽의 작은 무전소는 낮인데도 난방기가 꺼져 있습니다.
+현지 안내인 나로 노인은 당신이 가져온 장비를 보고도 한동안 말이 없습니다. 그러다 산 능선 쪽을 가리킵니다.
+
+"저 빛이 세 개로 보이면, 사람을 찾으러 가는 게 아니라 기록을 찾으러 가는 거야."
+
+그때 실종된 조사팀의 마지막 무전이 다시 재생됩니다.
+
+"우리는 아직 출발하지 않았다.
+만약 우리가 도착했다고 말하면, 그건 우리가 아니다."
+
+무전 기록의 시간은 내일 오후로 찍혀 있습니다.
 
 [State]
 Disclosure Level: PUBLIC
-Boundary Stability: 안정`;
+Boundary Stability: 안정
+Visible Classification: 실종 조사 / 시간 기록 오류`;
+
+    const raw = `${narrative}
+
+[Choices]
+1. 나로 노인에게 산 능선의 빛에 대해 묻는다.
+2. 마지막 무전 좌표를 지도에 표시한다.
+3. 조사팀 출발 기록을 확인한다.
+4. 무전 원본 파일을 복사한다.`;
+
+    return withBriefing({
+      narrative,
+      choices: [
+        { text: "나로 노인에게 산 능선의 빛에 대해 묻는다." },
+        { text: "마지막 무전 좌표를 지도에 표시한다." },
+        { text: "조사팀 출발 기록을 확인한다." },
+        { text: "무전 원본 파일을 복사한다." },
+      ],
+      allow_freeform: true,
+      raw,
+    }, briefingMessages);
+  }
+
+  const narrative = `[Scene]
+${identityLine}
+${completed.note}
+
+접속 기록에는 당신이 직접 적은 세부 메모가 비공개 난에 보존됩니다.
+아직 사건은 확정되지 않았지만, 단말기는 당신의 직업과 소지품을 기준으로 가장 낮은 공개 등급의 기록을 하나 고릅니다.
+
+화면에는 방금 생성된 이동 기록이 떠 있습니다.
+
+"출발지: 현재 위치
+도착지: 미등록
+동행자: 1명
+비고: 사용자가 아직 이동하지 않음."
+
+기록의 생성 시각은 지금보다 9분 뒤입니다. 지도에는 도착지가 보이지 않지만, 당신의 소지품 중 하나가 아주 짧게 진동합니다.
+
+[State]
+Disclosure Level: PUBLIC
+Boundary Stability: 안정
+Visible Classification: 개인 기록 오류 / 확인 필요`;
 
   const raw = `${narrative}
 
 [Choices]
-1. 제보자에게 먼저 연락한다.
-2. 현장 주소와 거주 기록을 확인한다.
-3. 캐릭터의 소속과 장비를 간단히 정한다.
-4. 제보 문장을 메모하고 유사 기록을 검색한다.`;
+1. 방금 생성된 이동 기록의 원본 로그를 확인한다.
+2. 현재 위치 주변에서 미등록 도착지 단서를 찾는다.
+3. 진동한 소지품을 꺼내 확인한다.
+4. 캐릭터의 소속과 현재 목적을 더 구체적으로 정한다.`;
 
   return withBriefing({
     narrative,
     choices: [
-      { text: "제보자에게 먼저 연락한다." },
-      { text: "현장 주소와 거주 기록을 확인한다." },
-      { text: "캐릭터의 소속과 장비를 간단히 정한다." },
-      { text: "제보 문장을 메모하고 유사 기록을 검색한다." },
+      { text: "방금 생성된 이동 기록의 원본 로그를 확인한다." },
+      { text: "현재 위치 주변에서 미등록 도착지 단서를 찾는다." },
+      { text: "진동한 소지품을 꺼내 확인한다." },
+      { text: "캐릭터의 소속과 현재 목적을 더 구체적으로 정한다." },
     ],
     allow_freeform: true,
     raw,
@@ -846,26 +1042,13 @@ const STARTER_ROUTE_OPENINGS: Record<string, GameResponse> = {
 비가 오는 오전 7시 40분.
 방벽 내부 제12생활구 민원 접수실에는 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
 
-당신의 단말기에 새 신고가 올라옵니다.
+당신은 오늘부터 주민 신고와 생활구 기록을 대조하는 민간 조사 보조원으로 배정되었습니다.
+선임 조사 보조원 박민재가 출근 확인도 끝나기 전에 당신의 단말기 쪽으로 새 업무를 밀어 넣습니다.
 
-"어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
-그 집에는 아이가 없습니다."
+"평범한 민원처럼 보이는데, 자동 분류가 두 번 실패했어.
+신고자는 겁먹었고, 생활구 기록은 이상하게 조용해."
 
-[State]
-Disclosure Level: PUBLIC
-Boundary Stability: 안정`,
-    choices: [
-      { text: "신고자에게 먼저 전화한다." },
-      { text: "현장 동행 요청을 넣는다." },
-      { text: "옆집 주소의 거주 기록을 조회한다." },
-      { text: "신고 문장을 메모해 둔다." },
-    ],
-    allow_freeform: true,
-    raw: `[Scene]
-비가 오는 오전 7시 40분.
-방벽 내부 제12생활구 민원 접수실에는 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
-
-당신의 단말기에 새 신고가 올라옵니다.
+단말기에 올라온 신고 내용은 짧습니다.
 
 "어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
 그 집에는 아이가 없습니다."
@@ -873,17 +1056,51 @@ Boundary Stability: 안정`,
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
+Visible Classification: 주민 신고 / 확인 필요`,
+    choices: [
+      { text: "박민재에게 이전 유사 신고가 있었는지 묻는다." },
+      { text: "신고자에게 먼저 전화한다." },
+      { text: "옆집 주소의 거주 기록을 조회한다." },
+      { text: "현장 동행 요청을 넣는다." },
+    ],
+    allow_freeform: true,
+    raw: `[Scene]
+비가 오는 오전 7시 40분.
+방벽 내부 제12생활구 민원 접수실에는 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
+
+당신은 오늘부터 주민 신고와 생활구 기록을 대조하는 민간 조사 보조원으로 배정되었습니다.
+선임 조사 보조원 박민재가 출근 확인도 끝나기 전에 당신의 단말기 쪽으로 새 업무를 밀어 넣습니다.
+
+"평범한 민원처럼 보이는데, 자동 분류가 두 번 실패했어.
+신고자는 겁먹었고, 생활구 기록은 이상하게 조용해."
+
+단말기에 올라온 신고 내용은 짧습니다.
+
+"어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
+그 집에는 아이가 없습니다."
+
+[State]
+Disclosure Level: PUBLIC
+Boundary Stability: 안정
+Visible Classification: 주민 신고 / 확인 필요
 
 [Choices]
-1. 신고자에게 먼저 전화한다.
-2. 현장 동행 요청을 넣는다.
+1. 박민재에게 이전 유사 신고가 있었는지 묻는다.
+2. 신고자에게 먼저 전화한다.
 3. 옆집 주소의 거주 기록을 조회한다.
-4. 신고 문장을 메모해 둔다.`,
+4. 현장 동행 요청을 넣는다.`,
   },
   "KR-INIT-001 잔여 문서 기록 관리자": {
     narrative: `[Scene]
 제3기록보존실의 조명은 늘 한 박자 늦게 깜박입니다.
-당신은 폐기 예정 문서 색인을 검수하던 중, 존재하면 안 되는 항목 하나를 발견합니다.
+당신은 오늘 폐기 예정 문서 색인을 검수하는 기록 관리자로 배정되어 있습니다.
+
+감독관 오연주가 출입 카드 리더기를 다시 확인하더니, 화면을 당신 쪽으로 돌립니다.
+
+"네 계정으로 복원 요청이 하나 올라왔어.
+방금 자리 배정받은 사람이 누를 수 있는 메뉴가 아닌데."
+
+작업 단말기에는 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타나 있습니다.
 
 KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
@@ -895,7 +1112,7 @@ KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정`,
     choices: [
-      { text: "문서 제목을 클릭한다." },
+      { text: "오연주에게 복원 요청자 확인 권한을 요청한다." },
       { text: "복원 로그를 먼저 확인한다." },
       { text: "열람 등급 불일치 사유를 조회한다." },
       { text: "화면을 캡처한 뒤 접속을 끊는다." },
@@ -903,7 +1120,14 @@ Boundary Stability: 안정`,
     allow_freeform: true,
     raw: `[Scene]
 제3기록보존실의 조명은 늘 한 박자 늦게 깜박입니다.
-당신은 폐기 예정 문서 색인을 검수하던 중, 존재하면 안 되는 항목 하나를 발견합니다.
+당신은 오늘 폐기 예정 문서 색인을 검수하는 기록 관리자로 배정되어 있습니다.
+
+감독관 오연주가 출입 카드 리더기를 다시 확인하더니, 화면을 당신 쪽으로 돌립니다.
+
+"네 계정으로 복원 요청이 하나 올라왔어.
+방금 자리 배정받은 사람이 누를 수 있는 메뉴가 아닌데."
+
+작업 단말기에는 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타나 있습니다.
 
 KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
@@ -916,7 +1140,7 @@ Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정
 
 [Choices]
-1. 문서 제목을 클릭한다.
+1. 오연주에게 복원 요청자 확인 권한을 요청한다.
 2. 복원 로그를 먼저 확인한다.
 3. 열람 등급 불일치 사유를 조회한다.
 4. 화면을 캡처한 뒤 접속을 끊는다.`,
@@ -924,8 +1148,14 @@ Boundary Stability: 안정
   "L3 현장 파견 계약 분석관": {
     narrative: `[Scene]
 파견 전 교육실에는 창문이 없습니다.
-벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
+당신은 L3 현장 파견 계약 분석관으로, 계약서의 위험 조항과 실제 진입 경로가 맞는지 확인하는 역할을 맡았습니다.
 
+현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
+
+"네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
+문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
+
+벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
 강사는 아무렇지 않게 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
@@ -939,16 +1169,22 @@ Disclosure Level: RESTRICTED
 Boundary Stability: 흔들림
 Visible Classification: 관찰`,
     choices: [
+      { text: "임태오에게 경로 변경 로그를 보내달라고 한다." },
       { text: "강사에게 17쪽의 문장을 묻는다." },
-      { text: "같은 교육 자료를 받은 사람들의 책자를 확인한다." },
       { text: "L3 진입 경로의 이전 버전을 조회한다." },
-      { text: "문장을 사진으로 남긴다." },
+      { text: "지도 단말기의 현재 좌표를 사진으로 남긴다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
 파견 전 교육실에는 창문이 없습니다.
-벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
+당신은 L3 현장 파견 계약 분석관으로, 계약서의 위험 조항과 실제 진입 경로가 맞는지 확인하는 역할을 맡았습니다.
 
+현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
+
+"네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
+문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
+
+벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
 강사는 아무렇지 않게 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
@@ -963,15 +1199,20 @@ Boundary Stability: 흔들림
 Visible Classification: 관찰
 
 [Choices]
-1. 강사에게 17쪽의 문장을 묻는다.
-2. 같은 교육 자료를 받은 사람들의 책자를 확인한다.
+1. 임태오에게 경로 변경 로그를 보내달라고 한다.
+2. 강사에게 17쪽의 문장을 묻는다.
 3. L3 진입 경로의 이전 버전을 조회한다.
-4. 문장을 사진으로 남긴다.`,
+4. 지도 단말기의 현재 좌표를 사진으로 남긴다.`,
   },
   "소바리 주변부 실종 조사팀 현지 협력자": {
     narrative: `[Scene]
 소바리 외곽의 작은 무전소.
 낮인데도 산 능선 위에는 별처럼 보이는 빛이 세 개 떠 있습니다.
+
+당신은 실종 조사팀의 현지 협력자로 호출되었습니다.
+현지 안내인 나로 노인은 오래된 무전기 옆에서 당신의 장비를 바라보다가, 산 능선 쪽을 가리킵니다.
+
+"저 빛이 세 개로 보이면, 사람을 찾으러 가는 게 아니라 기록을 찾으러 가는 거야."
 
 실종된 조사팀의 마지막 무전이 다시 재생됩니다.
 
@@ -984,15 +1225,20 @@ Visible Classification: 관찰
 Disclosure Level: PUBLIC
 Boundary Stability: 안정`,
     choices: [
+      { text: "나로 노인에게 산 능선의 빛에 대해 묻는다." },
       { text: "마지막 무전 좌표를 지도에 표시한다." },
       { text: "조사팀 출발 기록을 확인한다." },
-      { text: "현지 노인에게 산 능선의 빛에 대해 묻는다." },
       { text: "무전 원본 파일을 복사한다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
 소바리 외곽의 작은 무전소.
 낮인데도 산 능선 위에는 별처럼 보이는 빛이 세 개 떠 있습니다.
+
+당신은 실종 조사팀의 현지 협력자로 호출되었습니다.
+현지 안내인 나로 노인은 오래된 무전기 옆에서 당신의 장비를 바라보다가, 산 능선 쪽을 가리킵니다.
+
+"저 빛이 세 개로 보이면, 사람을 찾으러 가는 게 아니라 기록을 찾으러 가는 거야."
 
 실종된 조사팀의 마지막 무전이 다시 재생됩니다.
 
@@ -1006,9 +1252,9 @@ Disclosure Level: PUBLIC
 Boundary Stability: 안정
 
 [Choices]
-1. 마지막 무전 좌표를 지도에 표시한다.
-2. 조사팀 출발 기록을 확인한다.
-3. 현지 노인에게 산 능선의 빛에 대해 묻는다.
+1. 나로 노인에게 산 능선의 빛에 대해 묻는다.
+2. 마지막 무전 좌표를 지도에 표시한다.
+3. 조사팀 출발 기록을 확인한다.
 4. 무전 원본 파일을 복사한다.`,
   },
 };
@@ -1053,7 +1299,9 @@ export async function POST(req: Request) {
   const maxOutputTokens = normalizeOutputTokens(body.maxOutputTokens);
 
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const selectedRoute = lastUser ? detectStarterRoute(lastUser.content) : null;
+  const selectedRoute = lastUser && isStarterRouteCommand(lastUser.content)
+    ? detectStarterRoute(lastUser.content)
+    : null;
   if (lastUser) {
     const check = checkForbidden(lastUser.content);
     if (check.rejected) {
@@ -1145,10 +1393,18 @@ ${LANGUAGE_INSTRUCTIONS[language]}`;
 
 ---
 
+${OPENING_FLOW_RULE}
+
+---
+
 ${SESSION_CONTINUITY_RULE}
 
 ${sessionAnchor}`
       : `
+
+---
+
+${OPENING_FLOW_RULE}
 
 ---
 
