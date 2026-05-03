@@ -171,6 +171,72 @@ Do not ask the player whether to remember it. Do not mention memory capture in t
 If nothing important changed, omit [Memory].
 Keep [Choices] as the final section.`;
 
+const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
+- Treat the first user message, selected route, character job, player memo, and summary memory as the active session anchor.
+- Do not blend unrelated starter incidents into the current session.
+- Answer the player's latest action directly before introducing new complications.
+- Choices must follow from the current scene, current character role, and current investigation.
+- The Korean Barrier child-voice complaint belongs only to the Korean Barrier civilian route unless the player explicitly connects it to another case.
+- A Midas-Hand reporter or urban-legend journalist session should stay centered on Midas-Hand leads: deleted articles, suspicious contracts, informants, ownership records, money trails, cult rumors, and public-facing conspiracy evidence.
+- If earlier assistant text accidentally introduced a mismatched starter incident, treat it as a misfiled queue item or corrupted feed, then return to the active character's case without making the player repair the continuity.`;
+
+function buildSessionAnchor(messages: ChatMessage[], language: ResponseLanguage): string {
+  const firstUser = getFirstUserText(messages);
+  const source = messages.map((message) => message.content).join("\n");
+
+  if (/마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source)) {
+    return language === "en"
+      ? `Active Session Anchor:
+- Route: Midas-Hand urban legend reporter.
+- Keep the story about the Midas-Hand investigation, not the Korean Barrier child-voice complaint.
+- Core leads: erased article drafts, informant DM, suspicious contract files, ownership transfer records, small money trails, and people whose public records changed after contact with Midas-Hand.`
+      : `Active Session Anchor:
+- 루트: 마이더스손 괴담 조사 기자.
+- 한국 방벽 내부 아이 목소리 신고가 아니라 마이더스손 취재 사건을 중심으로 진행한다.
+- 핵심 단서: 삭제된 기사 초안, 익명 제보 DM, 수상한 계약 파일, 소유권 이전 기록, 소액 입금 흔적, 마이더스손 접촉 뒤 공개 기록이 바뀐 사람들.`;
+  }
+
+  if (/KR-?INIT-?001|폐기 문서|잔여 문서|기록 관리자|archive|records/i.test(source)) {
+    return language === "en"
+      ? `Active Session Anchor:
+- Route: KR-INIT-001 residual records.
+- Keep the story centered on deleted documents, restoration logs, clearance mismatches, and archive access traces.`
+      : `Active Session Anchor:
+- 루트: KR-INIT-001 잔여 문서 기록.
+- 삭제 문서, 복원 로그, 열람 등급 불일치, 접속 흔적을 중심으로 진행한다.`;
+  }
+
+  if (/L3|현장 파견|field support|field analyst/i.test(source)) {
+    return language === "en"
+      ? `Active Session Anchor:
+- Route: L3 field dispatch.
+- Keep the story centered on route errors, map/reality mismatch, quarantine pressure, and field-team judgment.`
+      : `Active Session Anchor:
+- 루트: L3 현장 파견.
+- 진입 경로 오류, 지도와 현실의 불일치, 격리 압박, 현장 판단을 중심으로 진행한다.`;
+  }
+
+  if (/한국\s*방벽|생활구|민간\s*조사\s*보조원|child voice|아이 목소리/i.test(source)) {
+    return language === "en"
+      ? `Active Session Anchor:
+- Route: Korean Barrier civilian investigation.
+- The child-voice complaint may be used here because it belongs to this route.`
+      : `Active Session Anchor:
+- 루트: 한국 방벽 내부 민간 조사.
+- 아이 목소리 신고는 이 루트에 속한 사건으로만 사용한다.`;
+  }
+
+  if (!firstUser.trim()) return "";
+
+  return language === "en"
+    ? `Active Session Anchor:
+- First character statement: ${firstUser.slice(0, 240)}
+- Continue from this character and their latest action. Do not restart with an unrelated starter case.`
+    : `Active Session Anchor:
+- 첫 캐릭터 입력: ${firstUser.slice(0, 240)}
+- 이 캐릭터와 최신 행동에서 이어간다. 무관한 시작 사건으로 재시작하지 않는다.`;
+}
+
 const STARTER_ROUTE_HINTS = [
   {
     pattern: /한국\s*방벽|민간\s*조사\s*보조원|KR_BARRIER_CIVIL_ASSISTANT/i,
@@ -207,19 +273,19 @@ function completeCharacterInput(input: string): { character: string; note: strin
   const parts = [input.trim()];
   const added: string[] = [];
 
-  if (!/(?:나이|연령|세)\s*[:：]?\s*\d+|\d+\s*세/.test(input)) {
+  if (!/(?:나이|연령|age|years?\s*old|세)\s*[:：]?\s*\d+|\d+\s*(?:세|years?\s*old)/i.test(input)) {
     parts.push("나이: 29");
     added.push("나이 29세");
   }
-  if (!/직업|소속/.test(input)) {
+  if (!/직업|소속|occupation|job|affiliation/i.test(input)) {
     parts.push("직업(소속): 민간 조사 협력자");
     added.push("직업/소속");
   }
-  if (!/소지품|장비/.test(input)) {
+  if (!/소지품|장비|items?|equipment|gear/i.test(input)) {
     parts.push("소지품: 휴대폰, 신분증, 작은 손전등");
     added.push("소지품");
   }
-  if (!/소지금|현금|돈|자금|원|만원/.test(input)) {
+  if (!/소지금|현금|돈|자금|funds?|cash|money|krw|usd|원|만원/i.test(input)) {
     parts.push("소지금: 50,000원");
     added.push("소지금 50,000원");
   }
@@ -556,7 +622,7 @@ function buildCustomCharacterOpening(input: string): GameResponse {
   const name = getCharacterName(character);
   const briefingMessages: ChatMessage[] = [{ role: "user", content: character }];
 
-  if (/기자|취재|괴담|과탐|조사|탐사|마이더스/i.test(character)) {
+  if (/기자|취재|괴담|마이더스|midas[-\s]*hand|midas/i.test(character)) {
     const narrative = `[Scene]
 ${name}. 당신의 취재 노트 첫 장에는 이렇게 적혀 있습니다.
 
@@ -565,32 +631,40 @@ ${completed.note}
 
 마이더스손 관련 괴담을 추적하던 중, 익명 제보 하나가 새벽 2시 17분에 도착했습니다.
 
-"방벽 내부 제12생활구 702호.
-그 집에는 아이가 없는데, 아이 목소리가 같은 문장을 반복합니다.
-저는 방 안에 없습니다."
+"당신이 아직 쓰지 않은 기사 초안이 세 번 삭제됐습니다.
+제목은 같습니다.
+마이더스손은 사람을 죽이지 않는다. 소유주를 바꾼다."
 
-첨부된 음성 파일은 11초입니다. 배경에는 비 오는 소리와 낡은 환기구 진동음이 깔려 있습니다. 파일 생성 시각은 내일 오전으로 찍혀 있습니다.
+첨부 파일은 세 개입니다. 삭제된 기사 복구 로그, 광고 계약서 스캔본, 그리고 폐상가 3층 라커 17번을 찍은 흐린 사진입니다.
+계약서의 서명란에는 당신 이름의 초성이 들어가 있고, 지급액은 방금 캐릭터가 적은 소지금과 같은 단위로 맞춰져 있습니다.
+
+제보자 계정은 마지막으로 이렇게 보냈습니다.
+
+"마이더스손을 팔로우한 사람은 돈을 받은 게 아닙니다.
+자기 기록의 소유권을 넘긴 겁니다.
+오늘 03:10 전에 라커를 열지 않으면, 당신 기사도 누군가의 이름으로 발행됩니다."
 
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
-Faction Heat: 무관심 -> 주시`;
+Faction Heat: 마이더스손 주변 계정 주시
+Visible Classification: 민간 괴담 / 확인 보류`;
 
     const raw = `${narrative}
 
 [Choices]
-1. 제보자에게 먼저 연락한다.
-2. 제12생활구 702호의 거주 기록을 확인한다.
-3. 음성 파일의 생성 시각과 파형을 분석한다.
-4. 마이더스손 관련 과거 제보 목록을 대조한다.`;
+1. 삭제된 기사 초안의 복구 로그를 확인한다.
+2. 제보자 계정의 생성 시각과 접속 위치를 추적한다.
+3. 폐상가 3층 라커 17번으로 향한다.
+4. 마이더스손 관련 과거 제보에서 같은 계약 문구를 찾는다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "제보자에게 먼저 연락한다." },
-        { text: "제12생활구 702호의 거주 기록을 확인한다." },
-        { text: "음성 파일의 생성 시각과 파형을 분석한다." },
-        { text: "마이더스손 관련 과거 제보 목록을 대조한다." },
+        { text: "삭제된 기사 초안의 복구 로그를 확인한다." },
+        { text: "제보자 계정의 생성 시각과 접속 위치를 추적한다." },
+        { text: "폐상가 3층 라커 17번으로 향한다." },
+        { text: "마이더스손 관련 과거 제보에서 같은 계약 문구를 찾는다." },
       ],
       allow_freeform: true,
       raw,
@@ -974,7 +1048,21 @@ ${DIFFICULTY_INSTRUCTIONS[difficulty]}`;
 ---
 
 ${LANGUAGE_INSTRUCTIONS[language]}`;
-    const contextInstructions = `${languageInstructions}${difficultyInstructions}${memoInstructions}${memoryInstructions}`;
+    const sessionAnchor = buildSessionAnchor(messages, language);
+    const continuityInstructions = sessionAnchor
+      ? `
+
+---
+
+${SESSION_CONTINUITY_RULE}
+
+${sessionAnchor}`
+      : `
+
+---
+
+${SESSION_CONTINUITY_RULE}`;
+    const contextInstructions = `${languageInstructions}${difficultyInstructions}${continuityInstructions}${memoInstructions}${memoryInstructions}`;
     const baseInstructions = `${INSTRUCTIONS}
 
 ---
