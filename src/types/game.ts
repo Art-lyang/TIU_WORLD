@@ -9,10 +9,20 @@ export type Choice = {
   text: string;
 };
 
+export type BriefingClue = {
+  title: string;
+  detail: string;
+  status: string;
+  source: string;
+};
+
 export type BriefingPerson = {
   name: string;
   emotion: string;
   detail: string;
+  trust?: string;
+  lastSeen?: string;
+  known?: string;
 };
 
 export type GameBriefing = {
@@ -20,6 +30,7 @@ export type GameBriefing = {
   status: string;
   emotion: string;
   goals: string[];
+  clues: BriefingClue[];
   groups: string[];
   people: BriefingPerson[];
   money: string;

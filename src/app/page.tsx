@@ -144,12 +144,17 @@ const UI_TEXT = {
       noThought: "다음엔 뭘 해야 하지...",
       money: "소지금",
       inventory: "소지품",
+      clues: "단서",
+      noClues: "아직 확정 단서 없음",
       unknown: "미확인",
       groups: "집단",
       noGroups: "아직 드러난 집단 없음",
       people: "인물 / 대화 상대",
       noPeople: "아직 대화 상대 없음",
       emotionPrefix: "감정",
+      trust: "관계",
+      lastSeen: "접점",
+      known: "알고 있는 것",
       logs: "로그 체크",
     },
     length: {
@@ -237,12 +242,17 @@ const UI_TEXT = {
       noThought: "What should I do next...",
       money: "Funds",
       inventory: "Inventory",
+      clues: "Clues",
+      noClues: "No confirmed clues yet",
       unknown: "Unknown",
       groups: "Groups",
       noGroups: "No revealed groups yet",
       people: "People / Contacts",
       noPeople: "No active contacts yet",
       emotionPrefix: "Emotion",
+      trust: "Relation",
+      lastSeen: "Contact",
+      known: "Known",
       logs: "Log Check",
     },
     length: {
@@ -794,6 +804,7 @@ function buildEventLogItem(response: GameResponse, turn: number, language: Langu
   const tags = Array.from(
     new Set([
       ...(briefing?.groups ?? []).map((group) => group.split(":")[0].trim()),
+      ...(briefing?.clues ?? []).map((clue) => clue.title),
       briefing?.status ?? "",
     ].filter(Boolean)),
   ).slice(0, 5);
@@ -824,6 +835,7 @@ function sceneImageSource(response: GameResponse): string {
     response.narrative,
     response.raw,
     response.briefing?.groups.join("\n") ?? "",
+    response.briefing?.clues.map((clue) => `${clue.title} ${clue.detail}`).join("\n") ?? "",
     response.briefing?.logs.join("\n") ?? "",
     response.briefing?.people.map((person) => `${person.name} ${person.detail}`).join("\n") ?? "",
   ].join("\n");
@@ -862,6 +874,23 @@ function BriefingList({ items, empty }: { items: string[]; empty: string }) {
   );
 }
 
+function BriefingChip({
+  label,
+  value,
+  className = "border-zinc-800 bg-zinc-900/60 text-zinc-200",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <span className={`inline-flex min-h-7 items-center gap-1 rounded border px-2 py-1 ${className}`}>
+      <span className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</span>
+      <span className="text-[11px] font-medium">{value}</span>
+    </span>
+  );
+}
+
 function BriefingPanel({
   briefing,
   labels,
@@ -871,93 +900,133 @@ function BriefingPanel({
   labels: (typeof UI_TEXT)[Language]["briefing"];
   language: Language;
 }) {
+  const clues = briefing.clues ?? [];
+  const primaryThought = briefing.goals[0] ?? labels.noThought;
+  const inventory = briefing.inventory ?? [];
+  const groups = briefing.groups ?? [];
+  const people = briefing.people ?? [];
+  const logs = briefing.logs ?? [];
+
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-950/70 text-xs">
-      <div className="border-b border-zinc-800 px-3 py-2 font-medium text-zinc-200">
-        {labels.title}
+    <div className="rounded-md border border-zinc-800/80 bg-zinc-950/55 text-xs shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-900 px-2.5 py-2">
+        <span className="mr-1 text-[11px] font-semibold tracking-wide text-zinc-300">
+          {labels.title}
+        </span>
+        <BriefingChip label={labels.time} value={briefing.time} />
+        <BriefingChip
+          label={labels.status}
+          value={translateBriefingValue(briefing.status, language)}
+          className="border-amber-900/50 bg-amber-950/15 text-amber-100"
+        />
+        <BriefingChip
+          label={labels.emotion}
+          value={translateBriefingValue(briefing.emotion, language)}
+          className="border-violet-900/50 bg-violet-950/15 text-violet-100"
+        />
+        <BriefingChip
+          label={labels.money}
+          value={translateBriefingValue(briefing.money, language)}
+          className="border-emerald-900/50 bg-emerald-950/15 text-emerald-100"
+        />
       </div>
 
-      <div className="grid gap-2 p-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <div className="rounded border border-zinc-900 bg-zinc-900/45 px-3 py-2">
-            <span className="mr-2 text-zinc-500">{labels.time}</span>
-            <span className="text-zinc-200">{briefing.time}</span>
-          </div>
-          <div className="rounded border border-zinc-900 bg-zinc-900/45 px-3 py-2">
-            <span className="mr-2 text-zinc-500">{labels.status}</span>
-            <span className="text-amber-200">{translateBriefingValue(briefing.status, language)}</span>
-          </div>
-          <div className="rounded border border-zinc-900 bg-zinc-900/45 px-3 py-2">
-            <span className="mr-2 text-zinc-500">{labels.emotion}</span>
-            <span className="text-violet-200">{translateBriefingValue(briefing.emotion, language)}</span>
-          </div>
-        </div>
+      <div className="border-b border-zinc-900 px-3 py-2">
+        <span className="mr-2 text-[11px] font-medium text-blue-200">{labels.thought}</span>
+        <span className="text-[13px] leading-relaxed text-zinc-200">{primaryThought}</span>
+      </div>
 
-        <div className="rounded border border-blue-900/40 bg-blue-950/15 px-3 py-2">
-          <div className="mb-1 text-[11px] font-medium text-blue-200">{labels.thought}</div>
-          <div className="space-y-1 text-sm leading-relaxed text-zinc-200">
-            {briefing.goals.length === 0 ? (
-              <p className="text-zinc-500">{labels.noThought}</p>
-            ) : (
-              briefing.goals.map((goal) => <p key={goal}>{goal}</p>)
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2">
-            <div className="mb-1 text-[11px] font-medium text-zinc-400">{labels.money}</div>
-            <span className="text-emerald-200">{translateBriefingValue(briefing.money, language)}</span>
-          </div>
-          <div className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2">
-            <div className="mb-1 text-[11px] font-medium text-zinc-400">{labels.inventory}</div>
-            <BriefingList items={briefing.inventory} empty={labels.unknown} />
-          </div>
-        </div>
-
-        <details className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2">
-          <summary className="cursor-pointer select-none font-medium text-zinc-300">
-            {labels.groups}
+      <div className="grid gap-1.5 p-2">
+        <details className="rounded border border-cyan-900/30 bg-cyan-950/10 px-2.5 py-1.5">
+          <summary className="cursor-pointer select-none font-medium text-cyan-100">
+            {labels.clues} <span className="text-cyan-400/70">{clues.length}</span>
           </summary>
-          <div className="mt-2">
-            <BriefingList items={briefing.groups} empty={labels.noGroups} />
-          </div>
-        </details>
-
-        <details
-          open={briefing.people.length > 0}
-          className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2"
-        >
-          <summary className="cursor-pointer select-none font-medium text-zinc-300">
-            {labels.people}
-          </summary>
-          <div className="mt-2 space-y-1.5">
-            {briefing.people.length === 0 ? (
-              <span className="text-zinc-500">{labels.noPeople}</span>
+          <div className="mt-2 grid gap-1.5">
+            {clues.length === 0 ? (
+              <span className="text-zinc-500">{labels.noClues}</span>
             ) : (
-              briefing.people.map((person) => (
+              clues.map((clue) => (
                 <div
-                  key={`${person.name}-${person.emotion}-${person.detail}`}
-                  className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-zinc-300"
+                  key={`${clue.title}-${clue.status}`}
+                  className="rounded border border-cyan-900/40 bg-black/35 px-2 py-1.5"
                 >
-                  <span className="font-medium text-zinc-100">{person.name}</span>
-                  <span className="mx-2 text-zinc-600">|</span>
-                  <span className="text-violet-200">
-                    {labels.emotionPrefix}: {translateBriefingValue(person.emotion, language)}
-                  </span>
-                  {person.detail && <span className="ml-2 text-zinc-500">{person.detail}</span>}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-zinc-100">{clue.title}</span>
+                    <span className="rounded border border-cyan-800/50 px-1.5 py-0.5 text-[10px] text-cyan-200">
+                      {clue.status}
+                    </span>
+                    <span className="text-[10px] text-zinc-500">{clue.source}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">{clue.detail}</p>
                 </div>
               ))
             )}
           </div>
         </details>
 
-        <details className="rounded border border-zinc-900 bg-zinc-900/35 px-3 py-2">
+        <details className="rounded border border-zinc-900 bg-zinc-900/25 px-2.5 py-1.5">
           <summary className="cursor-pointer select-none font-medium text-zinc-300">
-            {labels.logs}
+            {labels.people} <span className="text-zinc-500">{people.length}</span>
+          </summary>
+          <div className="mt-2 space-y-1.5">
+            {people.length === 0 ? (
+              <span className="text-zinc-500">{labels.noPeople}</span>
+            ) : (
+              people.map((person) => (
+                <div
+                  key={`${person.name}-${person.emotion}-${person.detail}`}
+                  className="rounded border border-zinc-800 bg-zinc-950/55 px-2 py-1.5 text-zinc-300"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-zinc-100">{person.name}</span>
+                    <span className="rounded border border-violet-900/50 px-1.5 py-0.5 text-[10px] text-violet-200">
+                      {labels.emotionPrefix}: {translateBriefingValue(person.emotion, language)}
+                    </span>
+                    {person.trust && (
+                      <span className="rounded border border-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        {labels.trust}: {person.trust}
+                      </span>
+                    )}
+                  </div>
+                  {person.detail && <p className="mt-1 text-[11px] text-zinc-500">{person.detail}</p>}
+                  {(person.lastSeen || person.known) && (
+                    <div className="mt-1 grid gap-1 text-[11px] text-zinc-500 sm:grid-cols-2">
+                      {person.lastSeen && <span>{labels.lastSeen}: {person.lastSeen}</span>}
+                      {person.known && <span>{labels.known}: {person.known}</span>}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          <details className="rounded border border-zinc-900 bg-zinc-900/25 px-2.5 py-1.5">
+            <summary className="cursor-pointer select-none font-medium text-zinc-300">
+              {labels.inventory} <span className="text-zinc-500">{inventory.length}</span>
+            </summary>
+            <div className="mt-2">
+              <BriefingList items={inventory} empty={labels.unknown} />
+            </div>
+          </details>
+
+          <details className="rounded border border-zinc-900 bg-zinc-900/25 px-2.5 py-1.5">
+            <summary className="cursor-pointer select-none font-medium text-zinc-300">
+              {labels.groups} <span className="text-zinc-500">{groups.length}</span>
+            </summary>
+            <div className="mt-2">
+              <BriefingList items={groups} empty={labels.noGroups} />
+            </div>
+          </details>
+        </div>
+
+        <details className="rounded border border-zinc-900 bg-zinc-900/25 px-2.5 py-1.5">
+          <summary className="cursor-pointer select-none font-medium text-zinc-300">
+            {labels.logs} <span className="text-zinc-500">{logs.length}</span>
           </summary>
           <div className="mt-2 space-y-1 text-zinc-500">
-            {briefing.logs.map((log) => (
+            {logs.map((log) => (
               <div key={log}>{log}</div>
             ))}
           </div>

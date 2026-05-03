@@ -193,6 +193,88 @@ const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - A Midas-Hand reporter or urban-legend journalist session should stay centered on Midas-Hand leads: deleted articles, suspicious contracts, informants, ownership records, money trails, cult rumors, and public-facing conspiracy evidence.
 - If earlier assistant text accidentally introduced a mismatched starter incident, treat it as a misfiled queue item or corrupted feed, then return to the active character's case without making the player repair the continuity.`;
 
+function buildRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage): string {
+  const source = messages.map((message) => message.content).join("\n");
+
+  if (/마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source)) {
+    return language === "en"
+      ? `Route Playbook: Midas-Hand Reporter
+- Core loop: public rumor -> deleted article or contract -> human source -> ownership or money trail.
+- Recurring contacts: Seo-ha Yoon, AfterGold_0310, ad/contract staff, property registry clerks.
+- Keep danger social and documentary first: erased drafts, false sponsorship files, altered ownership records, account pressure.
+- Do not import Korean Barrier child-voice, KR-INIT-001, L3, or Sovari incidents unless the player explicitly connects them.`
+      : `Route Playbook: 마이더스손 괴담 조사 기자
+- 핵심 루프: 공개 괴담 -> 삭제 기사/계약서 -> 사람 제보 -> 소유권/입금 흐름.
+- 반복 접점: 윤서하, AfterGold_0310, 광고/계약 담당자, 등기/소유권 기록 담당자.
+- 위험은 먼저 사회적/기록적 압박으로 전개한다: 삭제 초안, 가짜 협찬, 소유권 변경, 계정 압박.
+- 플레이어가 직접 연결하지 않는 한 방벽 아이 신고, KR-INIT-001, L3, 소바리 사건을 섞지 않는다.`;
+  }
+
+  if (/KR-?INIT-?001|잔여\s*문서|복원\s*로그|열람\s*등급|archive|records|restoration|clearance/i.test(source)) {
+    return language === "en"
+      ? `Route Playbook: KR-INIT-001 Records
+- Core loop: archive access -> restoration trace -> clearance mismatch -> human authorization -> concealed response record.
+- Recurring contacts: Yeon-ju Oh, archive security, anonymous restoration requester.
+- Keep choices about logs, permissions, redactions, preservation rooms, and access risk.
+- Do not pivot to unrelated field horror without a record, call, or official transfer.`
+      : `Route Playbook: KR-INIT-001 잔여 문서 기록
+- 핵심 루프: 기록 접근 -> 복원 흔적 -> 열람 등급 불일치 -> 사람 승인 -> 은폐된 대응 기록.
+- 반복 접점: 오연주, 기록보안 담당자, 익명 복원 요청자.
+- 선택지는 로그, 권한, 검열, 보존실, 접속 위험을 중심으로 만든다.
+- 기록, 호출, 공식 이관 없이 무관한 현장 공포 장면으로 이동하지 않는다.`;
+  }
+
+  if (/L3|현장\s*파견|진입\s*경로|지도\s*단말기|field dispatch|entry route|field analyst/i.test(source)) {
+    return language === "en"
+      ? `Route Playbook: L3 Field Dispatch
+- Core loop: dispatch order -> map mismatch -> route/version check -> field contact -> boundary consequence.
+- Recurring contacts: Tae-o Lim, instructor, dispatch controller, escort team.
+- Keep tension spatial and procedural: wrong roads, changed signs, missing approvals, quarantine timing.
+- Choices should preserve field judgment: verify, compare, mark coordinates, call support, decide whether to move.`
+      : `Route Playbook: L3 현장 파견
+- 핵심 루프: 파견 지시 -> 지도 불일치 -> 경로/버전 확인 -> 현장 접점 -> 경계 결과.
+- 반복 접점: 임태오, 강사, 파견 통제관, 동행 팀.
+- 긴장은 공간적/절차적으로 유지한다: 틀린 도로, 바뀐 표지판, 빈 승인란, 격리 시간.
+- 선택지는 확인, 대조, 좌표 기록, 지원 호출, 이동 판단처럼 현장 행동으로 만든다.`;
+  }
+
+  if (/한국\s*방벽|방벽\s*내부|생활구|민간\s*조사|주민\s*신고|child voice|living zone|barrier/i.test(source)) {
+    return language === "en"
+      ? `Route Playbook: Korean Barrier Civil Investigation
+- Core loop: resident report -> residence record -> caller or neighbor -> local procedure -> first fracture.
+- Recurring contacts: Min-jae Park, caller, living-zone clerk, escort guard.
+- Keep the scene grounded in civic procedure before revealing anomalies.
+- The child-voice report belongs here and should not spread to other routes by default.`
+      : `Route Playbook: 한국 방벽 내부 민간 조사
+- 핵심 루프: 주민 신고 -> 거주 기록 -> 신고자/이웃 -> 생활구 절차 -> 첫 균열.
+- 반복 접점: 박민재, 신고자, 생활구 기록 담당자, 동행 경비.
+- 이상 현상보다 생활 행정 절차를 먼저 통과하게 해 현실감을 만든다.
+- 아이 목소리 신고는 이 루트 소속 사건이며 기본적으로 다른 루트에 번지지 않는다.`;
+  }
+
+  if (/소바리|sovari|무전소|산\s*능선|radio station|ridge/i.test(source)) {
+    return language === "en"
+      ? `Route Playbook: Sovari Peripheral Search
+- Core loop: local testimony -> radio timestamp -> ridge sign -> missing team trace -> temporal contradiction.
+- Recurring contacts: Elder Naro, radio operator, missing team file, local guide.
+- Keep the mood quiet and uncertain; use folklore and records before direct confrontation.`
+      : `Route Playbook: 소바리 주변부 실종 조사
+- 핵심 루프: 현지 증언 -> 무전 시간 -> 산 능선 징후 -> 실종팀 흔적 -> 시간 모순.
+- 반복 접점: 나로 노인, 무전 담당자, 실종팀 파일, 현지 안내인.
+- 분위기는 조용하고 불확실하게 유지하며, 직접 충돌보다 전승과 기록을 먼저 사용한다.`;
+  }
+
+  return language === "en"
+    ? `Route Playbook: Open Custom Start
+- Build the first case from the player's job, items, and funds.
+- Choose one practical contact and one concrete first clue.
+- Keep the next choices anchored to the character's capabilities.`
+    : `Route Playbook: 자유 캐릭터 시작
+- 플레이어의 직업, 소지품, 소지금을 기준으로 첫 사건을 만든다.
+- 실용적인 접촉 인물 한 명과 구체적인 첫 단서 하나를 둔다.
+- 다음 선택지는 캐릭터가 실제로 할 수 있는 행동에 맞춘다.`;
+}
+
 function buildSessionAnchor(messages: ChatMessage[], language: ResponseLanguage): string {
   const firstUser = getFirstUserText(messages);
   const source = messages.map((message) => message.content).join("\n");
@@ -283,6 +365,8 @@ function detectStarterRoute(input: string): string | null {
 }
 
 function getCharacterName(input: string): string {
+  const trimmed = input.trim();
+  if (/^START_ROUTE:/i.test(trimmed) || /^[1-3](?:[.)])?$/.test(trimmed)) return "당신";
   const englishNameMatch = input.match(/(?:Name\s*[:：]\s*)([A-Za-z][A-Za-z0-9_-]{1,24})/i);
   if (englishNameMatch) return englishNameMatch[1];
   const nameMatch = input.match(/(?:이름\s*[:：]\s*)?([가-힣A-Za-z0-9_-]{2,12})/);
@@ -467,6 +551,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: characterName,
       emotion: language === "en" ? "Calm" : "평온",
       detail: language === "en" ? "Player character" : "플레이어 캐릭터",
+      trust: language === "en" ? "Self" : "본인",
+      lastSeen: language === "en" ? "Current viewpoint" : "현재 시점",
+      known: language === "en" ? "Identity anchor for this session" : "이번 세션의 시점 인물",
     });
   }
   if (!isMidasRoute && /제보자|신고자|caller|informant/i.test(source)) {
@@ -475,6 +562,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? (isReporter ? "Caller" : "Informant") : (isReporter ? "신고자" : "제보자"),
       emotion: language === "en" ? "Uneasy" : "불안",
       detail: language === "en" ? "Contact possible / reliability unknown" : "접촉 가능 / 신뢰도 미확인",
+      trust: language === "en" ? "Unverified" : "미검증",
+      lastSeen: language === "en" ? "Waiting for contact" : "연락 대기",
+      known: language === "en" ? "Holds the first human account" : "첫 사람 증언을 쥐고 있음",
     });
   }
   if (/박민재|민원 접수|방벽 내부|생활구|barrier|living zone/i.test(source)) {
@@ -482,6 +572,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Min-jae Park" : "박민재",
       emotion: language === "en" ? "Cautious" : "신중",
       detail: language === "en" ? "Civil desk senior / knows local procedures" : "민원 접수 선임 / 생활구 절차 숙지",
+      trust: language === "en" ? "Procedural ally" : "절차상 아군",
+      lastSeen: language === "en" ? "Civil reception desk" : "민원 접수실",
+      known: language === "en" ? "Can find similar reports and escort rules" : "유사 신고와 동행 절차 확인 가능",
     });
   }
   if (isMidasRoute) {
@@ -489,11 +582,17 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Seo-ha Yoon" : "윤서하",
       emotion: language === "en" ? "Concerned" : "걱정",
       detail: language === "en" ? "Desk editor / can verify deleted drafts" : "편집 데스크 / 삭제 초안 확인 가능",
+      trust: language === "en" ? "Known contact" : "기존 접점",
+      lastSeen: language === "en" ? "Editor message" : "편집 데스크 메시지",
+      known: language === "en" ? "Knows CMS and sponsorship file inconsistencies" : "CMS와 협찬 제안서 불일치를 알고 있음",
     });
     people.push({
       name: "AfterGold_0310",
       emotion: language === "en" ? "Fear" : "공포",
       detail: language === "en" ? "Anonymous informant / contact unstable" : "익명 제보자 / 접속 불안정",
+      trust: language === "en" ? "Risky source" : "위험한 제보원",
+      lastSeen: language === "en" ? "02:17 message" : "02:17 메시지",
+      known: language === "en" ? "Claims ownership records change after contact" : "접촉 후 기록 소유권이 바뀐다고 주장",
     });
   }
   if (/강사|instructor/i.test(source)) {
@@ -501,6 +600,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "L3 Instructor" : "L3 강사",
       emotion: language === "en" ? "Controlled" : "통제",
       detail: language === "en" ? "Knows procedure / avoids direct answers" : "절차 숙지 / 직접 답변 회피",
+      trust: language === "en" ? "Official but evasive" : "공식적이나 회피적",
+      lastSeen: language === "en" ? "Pre-dispatch classroom" : "파견 전 교육실",
+      known: language === "en" ? "Repeats doctrine about trusting the road" : "길과 지도에 관한 원칙을 반복함",
     });
   }
   if (/임태오|지도 단말기|진입 경로|field support|entry route/i.test(source)) {
@@ -508,6 +610,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Tae-o Lim" : "임태오",
       emotion: language === "en" ? "Alert" : "경계",
       detail: language === "en" ? "Field support operator / monitors route data" : "현장 지원 오퍼레이터 / 경로 데이터 감시",
+      trust: language === "en" ? "Operational ally" : "작전상 아군",
+      lastSeen: language === "en" ? "Map terminal handoff" : "지도 단말기 인계",
+      known: language === "en" ? "Saw route changes with no approver" : "승인자 없는 경로 변경을 확인함",
     });
   }
   if (/복원 로그|폐기 문서|열람 등급|archive|restoration log/i.test(source)) {
@@ -515,6 +620,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Archive Security" : "기록보안 담당자",
       emotion: language === "en" ? "Suspicious" : "의심",
       detail: language === "en" ? "Can lock access if alerted" : "접속 이상 감지 시 차단 가능",
+      trust: language === "en" ? "Institutional risk" : "기관 위험",
+      lastSeen: language === "en" ? "Access monitor" : "접속 감시",
+      known: language === "en" ? "Controls archive alarms and lockouts" : "기록망 경보와 차단 권한 보유",
     });
   }
   if (/오연주|제3기록보존실|색인|기록 관리자/i.test(source)) {
@@ -522,6 +630,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Yeon-ju Oh" : "오연주",
       emotion: language === "en" ? "Uneasy" : "불안",
       detail: language === "en" ? "Archive supervisor / can approve restoration checks" : "기록보존실 감독관 / 복원 확인 승인 가능",
+      trust: language === "en" ? "Cautious supervisor" : "신중한 감독관",
+      lastSeen: language === "en" ? "Preservation room entrance" : "기록보존실 출입구",
+      known: language === "en" ? "Can authorize restoration-request checks" : "복원 요청자 확인 권한을 열 수 있음",
     });
   }
   if (/소바리|Sovari|무전소|산 능선/i.test(source)) {
@@ -529,6 +640,9 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
       name: language === "en" ? "Elder Naro" : "나로 노인",
       emotion: language === "en" ? "Guarded" : "경계",
       detail: language === "en" ? "Local witness / knows the ridge stories" : "현지 증언자 / 산 능선 전승을 앎",
+      trust: language === "en" ? "Local witness" : "현지 증언자",
+      lastSeen: language === "en" ? "Small radio station" : "작은 무전소",
+      known: language === "en" ? "Connects ridge lights to records, not rescue" : "산 능선의 빛을 구조가 아닌 기록과 연결함",
     });
   }
 
@@ -538,6 +652,112 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
   }
 
   return Array.from(unique.values()).slice(0, 6);
+}
+
+function addClue(
+  clues: NonNullable<GameResponse["briefing"]>["clues"],
+  clue: NonNullable<GameResponse["briefing"]>["clues"][number],
+) {
+  if (!clues.some((item) => item.title === clue.title)) clues.push(clue);
+}
+
+function extractClues(text: string, messages: ChatMessage[], language: ResponseLanguage): NonNullable<GameResponse["briefing"]>["clues"] {
+  const source = `${getFirstUserText(messages)}\n${text}`;
+  const clues: NonNullable<GameResponse["briefing"]>["clues"] = [];
+
+  if (/마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Deleted Draft" : "삭제된 기사 초안",
+      detail: language === "en" ? "The CMS draft vanished while a matching sponsorship file appeared." : "CMS 초안은 사라졌고 같은 제목의 협찬 제안서가 나타났다.",
+      status: language === "en" ? "Unverified" : "미검증",
+      source: language === "en" ? "Editor / CMS" : "윤서하 / CMS",
+    });
+    addClue(clues, {
+      title: language === "en" ? "Locker 17 Deadline" : "라커 17번 시한",
+      detail: language === "en" ? "AfterGold_0310 says the locker must be opened before 03:10." : "AfterGold_0310은 03:10 전에 라커를 열어야 한다고 말했다.",
+      status: language === "en" ? "Time-sensitive" : "시간 민감",
+      source: "AfterGold_0310",
+    });
+  }
+
+  if (/아이 목소리|아이가 없습니다|child voice|there is no child/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Child-Voice Complaint" : "아이 목소리 신고",
+      detail: language === "en" ? "A neighbor reports a repeated sentence from a home with no child record." : "아이 기록이 없는 집에서 같은 문장이 반복된다는 신고가 접수됐다.",
+      status: language === "en" ? "Needs record check" : "기록 대조 필요",
+      source: language === "en" ? "Caller" : "신고자",
+    });
+  }
+  if (/자동 분류|classification failed|생활구 기록|residence record/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Classification Failure" : "자동 분류 실패",
+      detail: language === "en" ? "The civic system failed to classify the report twice." : "민원 시스템이 신고를 두 번 자동 분류하지 못했다.",
+      status: language === "en" ? "System anomaly" : "시스템 이상",
+      source: language === "en" ? "Civil desk terminal" : "민원 단말기",
+    });
+  }
+
+  if (/KR-?INIT-?001/i.test(source)) {
+    addClue(clues, {
+      title: "KR-INIT-001",
+      detail: language === "en" ? "A deleted record reappeared with restoration and clearance mismatch." : "삭제된 기록이 복원 상태와 열람 등급 불일치로 다시 나타났다.",
+      status: language === "en" ? "Contradictory record" : "불일치 기록",
+      source: language === "en" ? "Archive index" : "기록 색인",
+    });
+  }
+  if (/복원 로그|restoration log|복원 요청/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Restoration Request" : "복원 요청",
+      detail: language === "en" ? "A restoration request was filed under the player's account or route." : "플레이어 계정 또는 경로로 복원 요청이 올라왔다.",
+      status: language === "en" ? "Traceable" : "추적 가능",
+      source: language === "en" ? "Archive supervisor" : "오연주",
+    });
+  }
+
+  if (/세 번째 표지판|third sign/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Third Sign Warning" : "세 번째 표지판 경고",
+      detail: language === "en" ? "A handwritten warning appears on page 17 of the L3 material." : "L3 교육 자료 17쪽에 돌아오지 말라는 필체가 남아 있다.",
+      status: language === "en" ? "Route hazard" : "경로 위험",
+      source: language === "en" ? "Training page 17" : "교육 자료 17쪽",
+    });
+  }
+  if (/경로.*바뀌|route.*chang|승인자|approver|지도 단말기|map terminal/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Changed Route" : "변경된 진입 경로",
+      detail: language === "en" ? "The entry route changed without a visible approver." : "진입 경로가 승인자 없이 여러 번 바뀌었다.",
+      status: language === "en" ? "Needs version check" : "버전 확인 필요",
+      source: language === "en" ? "Tae-o Lim / map terminal" : "임태오 / 지도 단말기",
+    });
+  }
+
+  if (/우리는 아직 출발하지 않았다|내일 오후|tomorrow afternoon|not departed/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Future Radio Log" : "미래 시각 무전",
+      detail: language === "en" ? "The missing team's last radio log is timestamped in the future." : "실종팀의 마지막 무전 시간이 내일 오후로 찍혀 있다.",
+      status: language === "en" ? "Temporal contradiction" : "시간 모순",
+      source: language === "en" ? "Radio station" : "무전소",
+    });
+  }
+  if (/산 능선|ridge|빛이 세 개|three lights/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Three Ridge Lights" : "산 능선의 세 빛",
+      detail: language === "en" ? "Local testimony links the lights to records, not rescue." : "현지 증언은 그 빛을 구조가 아니라 기록과 연결한다.",
+      status: language === "en" ? "Local testimony" : "현지 증언",
+      source: language === "en" ? "Elder Naro" : "나로 노인",
+    });
+  }
+
+  if (/이동 기록|미등록|진동|movement record|unregistered|vibrat/i.test(source)) {
+    addClue(clues, {
+      title: language === "en" ? "Future Movement Record" : "미래 이동 기록",
+      detail: language === "en" ? "A movement log exists before the player has moved." : "아직 이동하지 않았는데 9분 뒤의 이동 기록이 생성됐다.",
+      status: language === "en" ? "Open clue" : "초기 단서",
+      source: language === "en" ? "Session terminal" : "세션 단말기",
+    });
+  }
+
+  return clues.slice(0, 5);
 }
 
 function stripSystemLog(text: string): string {
@@ -738,6 +958,7 @@ function buildBriefing(response: Pick<GameResponse, "raw" | "narrative" | "choic
     status: extractStatus(text, language),
     emotion: extractEmotion(text, language),
     goals: extractGoals(response, messages, language),
+    clues: extractClues(text, messages, language),
     groups: extractGroups(text, messages, language),
     people: extractPeople(text, messages, language),
     money: extractMoney(messages, text, language),
@@ -1388,12 +1609,17 @@ ${DIFFICULTY_INSTRUCTIONS[difficulty]}`;
 
 ${LANGUAGE_INSTRUCTIONS[language]}`;
     const sessionAnchor = buildSessionAnchor(messages, language);
+    const routePlaybook = buildRoutePlaybook(messages, language);
     const continuityInstructions = sessionAnchor
       ? `
 
 ---
 
 ${OPENING_FLOW_RULE}
+
+---
+
+${routePlaybook}
 
 ---
 
@@ -1405,6 +1631,10 @@ ${sessionAnchor}`
 ---
 
 ${OPENING_FLOW_RULE}
+
+---
+
+${routePlaybook}
 
 ---
 
