@@ -53,6 +53,76 @@ function selectModel(profile: ModelProfile): string {
   return defaultModel;
 }
 
+function supportsReasoningConfig(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return normalized.startsWith("gpt-5") || /^o\d/.test(normalized) || normalized.startsWith("o-");
+}
+
+function extractOpenAIText(response: unknown): string {
+  if (!response || typeof response !== "object") return "";
+
+  const direct = (response as { output_text?: unknown }).output_text;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  const output = (response as { output?: unknown }).output;
+  if (!Array.isArray(output)) return "";
+
+  const parts: string[] = [];
+  for (const item of output) {
+    if (!item || typeof item !== "object") continue;
+
+    const outputItem = item as {
+      content?: unknown;
+      refusal?: unknown;
+      text?: unknown;
+    };
+
+    if (typeof outputItem.text === "string") parts.push(outputItem.text);
+    if (typeof outputItem.refusal === "string") parts.push(outputItem.refusal);
+
+    if (!Array.isArray(outputItem.content)) continue;
+    for (const content of outputItem.content) {
+      if (!content || typeof content !== "object") continue;
+
+      const part = content as { refusal?: unknown; text?: unknown };
+      if (typeof part.text === "string") parts.push(part.text);
+      if (typeof part.refusal === "string") parts.push(part.refusal);
+    }
+  }
+
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function getEmptyResponseMessage(response: unknown, language: ResponseLanguage): string {
+  const details: string[] = [];
+
+  if (response && typeof response === "object") {
+    const status = (response as { status?: unknown }).status;
+    if (typeof status === "string" && status) details.push(`status: ${status}`);
+
+    const incomplete = (response as { incomplete_details?: unknown }).incomplete_details;
+    if (incomplete && typeof incomplete === "object") {
+      const reason = (incomplete as { reason?: unknown }).reason;
+      if (typeof reason === "string" && reason) details.push(`reason: ${reason}`);
+    }
+
+    const error = (response as { error?: unknown }).error;
+    if (error && typeof error === "object") {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message) details.push(`error: ${message}`);
+    }
+  }
+
+  const suffix = details.length > 0 ? ` (${details.join(", ")})` : "";
+  return language === "en"
+    ? `OpenAI returned no visible text${suffix}. Try a larger response length or check the model setting.`
+    : `OpenAI 응답에 표시 가능한 텍스트가 없습니다${suffix}. 응답 길이를 조금 늘리거나 모델 설정을 확인해 주세요.`;
+}
+
 const DIFFICULTY_INSTRUCTIONS: Record<DifficultyMode, string> = {
   story: `Difficulty Mode: 스토리 모드
 - Prioritize world exploration, atmosphere, clues, and forward motion.
@@ -911,10 +981,8 @@ ${LANGUAGE_INSTRUCTIONS[language]}`;
 
 ${MEMORY_CAPTURE_RULE}`;
 
-    const response = await client.responses.create({
-      model: selectedModel,
-      instructions: selectedRoute
-        ? `${baseInstructions}
+    const responseInstructions = selectedRoute
+      ? `${baseInstructions}
 
 ---
 
@@ -925,17 +993,34 @@ Do not offer the starting route list again.
 Do not ask for a character sheet, exact age, gender, or name before the first scene.
 ${language === "en" ? 'Assume the player character is an adult and address them as "you" until details are provided.' : 'Assume the player character is an adult and address them as "당신" until details are provided.'}
 End with [Choices] as the final section.${contextInstructions}`
-        : `${baseInstructions}${contextInstructions}`,
-      max_output_tokens: maxOutputTokens,
-      input: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-    });
+      : `${baseInstructions}${contextInstructions}`;
 
-    const text = response.output_text.trim();
+    const responseInput = messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+    const responseOptions = {
+      model: selectedModel,
+      instructions: responseInstructions,
+      max_output_tokens: maxOutputTokens,
+      input: responseInput,
+      ...(supportsReasoningConfig(selectedModel)
+        ? { reasoning: { effort: "low" as const } }
+        : {}),
+    };
+
+    let response = await client.responses.create(responseOptions);
+    let text = extractOpenAIText(response);
+    if (!text && maxOutputTokens < MAX_OUTPUT_TOKENS) {
+      const retryOutputTokens = Math.min(MAX_OUTPUT_TOKENS, Math.max(1600, maxOutputTokens + 800));
+      response = await client.responses.create({
+        ...responseOptions,
+        max_output_tokens: retryOutputTokens,
+      });
+      text = extractOpenAIText(response);
+    }
     if (!text) {
-      throw new Error(language === "en" ? "OpenAI returned an empty response." : "OpenAI 응답이 비어 있습니다.");
+      throw new Error(getEmptyResponseMessage(response, language));
     }
 
     const parsed = parseGameResponse(text);
