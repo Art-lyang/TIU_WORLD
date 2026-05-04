@@ -123,6 +123,29 @@ function getEmptyResponseMessage(response: unknown, language: ResponseLanguage):
     : `OpenAI 응답에 표시 가능한 텍스트가 없습니다${suffix}. 응답 길이를 조금 늘리거나 모델 설정을 확인해 주세요.`;
 }
 
+function isOpenAIOutputTruncated(response: unknown): boolean {
+  if (!response || typeof response !== "object") return false;
+
+  const status = (response as { status?: unknown }).status;
+  const incomplete = (response as { incomplete_details?: unknown }).incomplete_details;
+  if (status === "incomplete" && incomplete && typeof incomplete === "object") {
+    const reason = (incomplete as { reason?: unknown }).reason;
+    if (reason === "max_output_tokens") return true;
+  }
+
+  const output = (response as { output?: unknown }).output;
+  if (!Array.isArray(output)) return false;
+
+  return output.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as { incomplete_details?: unknown; status?: unknown };
+    if (record.status !== "incomplete") return false;
+    if (!record.incomplete_details || typeof record.incomplete_details !== "object") return true;
+    const reason = (record.incomplete_details as { reason?: unknown }).reason;
+    return reason === "max_output_tokens";
+  });
+}
+
 const DIFFICULTY_INSTRUCTIONS: Record<DifficultyMode, string> = {
   story: `Difficulty Mode: 스토리 모드
 - Prioritize world exploration, atmosphere, clues, and forward motion.
@@ -1500,6 +1523,10 @@ export async function POST(req: Request) {
     modelProfile?: ModelProfile;
     language?: ResponseLanguage;
     maxOutputTokens?: number;
+    continueFrom?: {
+      narrative?: string;
+      raw?: string;
+    };
   };
   try {
     body = await req.json();
@@ -1518,6 +1545,12 @@ export async function POST(req: Request) {
   const language = normalizeLanguage(body.language);
   const selectedModel = selectModel(modelProfile);
   const maxOutputTokens = normalizeOutputTokens(body.maxOutputTokens);
+  const continueFrom = body.continueFrom && typeof body.continueFrom === "object"
+    ? {
+        narrative: typeof body.continueFrom.narrative === "string" ? body.continueFrom.narrative.slice(0, 8000) : "",
+        raw: typeof body.continueFrom.raw === "string" ? body.continueFrom.raw.slice(0, 12000) : "",
+      }
+    : null;
 
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const selectedRoute = lastUser && isStarterRouteCommand(lastUser.content)
@@ -1542,12 +1575,12 @@ export async function POST(req: Request) {
     }
   }
 
-  if (language === "ko" && selectedRoute && messages.length <= 3) {
+  if (!continueFrom && language === "ko" && selectedRoute && messages.length <= 3) {
     const opening = STARTER_ROUTE_OPENINGS[selectedRoute];
     if (opening) return NextResponse.json(withBriefing(opening, messages));
   }
 
-  if (language === "ko" && !selectedRoute && messages.length === 1 && lastUser) {
+  if (!continueFrom && language === "ko" && !selectedRoute && messages.length === 1 && lastUser) {
     return NextResponse.json(buildCustomCharacterOpening(lastUser.content));
   }
 
@@ -1646,7 +1679,7 @@ ${SESSION_CONTINUITY_RULE}`;
 
 ${MEMORY_CAPTURE_RULE}`;
 
-    const responseInstructions = selectedRoute
+    const responseInstructions = selectedRoute && !continueFrom
       ? `${baseInstructions}
 
 ---
@@ -1660,14 +1693,55 @@ ${language === "en" ? 'Assume the player character is an adult and address them 
 End with [Choices] as the final section.${contextInstructions}`
       : `${baseInstructions}${contextInstructions}`;
 
+    const continuationInstruction = continueFrom
+      ? language === "en"
+        ? `The previous assistant response was cut off by the output limit. Continue it in a readable way.
+
+Previous cut response:
+${continueFrom.raw || continueFrom.narrative}
+
+Rules:
+- Return only the repaired continuation segment, not a full restart.
+- Begin from the last incomplete sentence or the previous full sentence if needed, so the reader does not see a dangling suffix.
+- Do not start with a fragment such as only the remaining syllables of a cut word.
+- Preserve the same scene, NPCs, clues, and tone.
+- If [Choices] were missing or cut, include complete [Choices] at the end.`
+        : `이전 AI-GM 응답이 출력 제한으로 중간에 잘렸습니다. 읽기 좋게 이어서 생성하세요.
+
+잘린 이전 응답:
+${continueFrom.raw || continueFrom.narrative}
+
+규칙:
+- 전체 장면을 처음부터 다시 시작하지 말고, 읽기 좋은 이어쓰기 구간만 반환합니다.
+- 마지막 미완성 문장 또는 필요하면 그 직전 완성 문장부터 다시 시작해 문맥이 자연스럽게 이어지게 합니다.
+- 잘린 글자의 나머지 조각만, 예를 들어 "우하사..."처럼 시작하지 않습니다.
+- 같은 장면, 인물, 단서, 말투를 유지합니다.
+- [Choices]가 없거나 잘렸다면 마지막에 완성된 [Choices]를 포함합니다.`
+      : "";
+
     const responseInput = messages.map((message) => ({
       role: message.role,
       content: message.content,
     }));
+    if (continuationInstruction) {
+      responseInput.push({
+        role: "user",
+        content: continuationInstruction,
+      });
+    }
     const responseOptions = {
       model: selectedModel,
-      instructions: responseInstructions,
-      max_output_tokens: maxOutputTokens,
+      instructions: continueFrom
+        ? `${responseInstructions}
+
+---
+
+Continuation Mode:
+The next answer is a readable continuation of a truncated assistant response. It should be useful as a separate message placed below the cut text.`
+        : responseInstructions,
+      max_output_tokens: continueFrom
+        ? Math.min(MAX_OUTPUT_TOKENS, Math.max(1600, maxOutputTokens + 800))
+        : maxOutputTokens,
       input: responseInput,
       ...(supportsReasoningConfig(selectedModel)
         ? { reasoning: { effort: "low" as const } }
@@ -1689,7 +1763,13 @@ End with [Choices] as the final section.${contextInstructions}`
     }
 
     const parsed = parseGameResponse(text);
-    return NextResponse.json(withBriefing(parsed, messages, language));
+    const gameResponse = withBriefing(parsed, messages, language);
+    gameResponse.truncated = isOpenAIOutputTruncated(response);
+    if (continueFrom) {
+      gameResponse.continuation = true;
+      gameResponse.continuation_of = (continueFrom.narrative || continueFrom.raw).slice(0, 160);
+    }
+    return NextResponse.json(gameResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : language === "en" ? "Unknown error" : "알 수 없는 오류";
     return NextResponse.json({ error: message }, { status: 500 });

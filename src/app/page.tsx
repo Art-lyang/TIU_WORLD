@@ -185,6 +185,9 @@ const UI_TEXT = {
       scrollBottom: "맨 아래",
       scrollBottomLabel: "채팅 맨 아래로 이동",
       aiLabel: "AI 추천 답변",
+      continueHint: "응답이 출력 제한으로 중간에 끊겼을 수 있습니다.",
+      continueGeneration: "이어서 생성",
+      continuing: "이어 쓰는 중",
     },
   },
   en: {
@@ -283,6 +286,9 @@ const UI_TEXT = {
       scrollBottom: "Bottom",
       scrollBottomLabel: "Jump to latest chat",
       aiLabel: "AI suggested replies",
+      continueHint: "This response may have been cut off by the output limit.",
+      continueGeneration: "Continue",
+      continuing: "Continuing",
     },
   },
 } as const;
@@ -1471,6 +1477,7 @@ export default function Home() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [continuingTurnIndex, setContinuingTurnIndex] = useState<number | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showPlayerMemo, setShowPlayerMemo] = useState(false);
   const [showScrollBottomButton, setShowScrollBottomButton] = useState(false);
@@ -1656,6 +1663,25 @@ export default function Home() {
     .map((item, index) => `${index + 1}. ${item.text}`)
     .join("\n");
 
+  function buildErrorResponse(err: unknown): GameResponse {
+    const message = err instanceof Error
+      ? err.message
+      : language === "en"
+        ? "Unknown error"
+        : "알 수 없는 오류";
+    const retryChoices = language === "en"
+      ? [{ text: "Try again" }, { text: "Look around" }, { text: "Pause for a moment" }]
+      : [{ text: "다시 시도한다" }, { text: "주변을 살핀다" }, { text: "잠시 멈춘다" }];
+    const errorPrefix = language === "en" ? "Error" : "오류";
+
+    return {
+      narrative: `[${errorPrefix}] ${message}`,
+      choices: retryChoices,
+      allow_freeform: true,
+      raw: `[${errorPrefix}] ${message}`,
+    };
+  }
+
   async function send(text: string, displayText = text, options: { hideUserTurn?: boolean } = {}) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -1706,28 +1732,78 @@ export default function Home() {
       setEventLogItems((items) => mergeEventLogItem(items, buildEventLogItem(data, nextTurns.length, language)));
       setTurns((prev) => [...prev, { role: "assistant", response: data }]);
     } catch (err) {
-      const message = err instanceof Error
-        ? err.message
-        : language === "en"
-          ? "Unknown error"
-          : "알 수 없는 오류";
-      const retryChoices = language === "en"
-        ? [{ text: "Try again" }, { text: "Look around" }, { text: "Pause for a moment" }]
-        : [{ text: "다시 시도한다" }, { text: "주변을 살핀다" }, { text: "잠시 멈춘다" }];
-      const errorPrefix = language === "en" ? "Error" : "오류";
       setTurns((prev) => [
         ...prev,
         {
           role: "assistant",
-          response: {
-            narrative: `[${errorPrefix}] ${message}`,
-            choices: retryChoices,
-            allow_freeform: true,
-            raw: `[${errorPrefix}] ${message}`,
-          },
+          response: buildErrorResponse(err),
         },
       ]);
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function continueAssistantTurn(turnIndex: number, response: GameResponse) {
+    if (loading || continuingTurnIndex !== null) return;
+
+    const apiMessages: ChatMessage[] = turns.map((turn) =>
+      turn.role === "user"
+        ? { role: "user", content: turn.apiContent ?? turn.content }
+        : { role: "assistant", content: turn.response.raw },
+    );
+
+    setLoading(true);
+    setContinuingTurnIndex(turnIndex);
+    setShowSuggestions(false);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: apiMessages,
+          memo: memo.trim() || undefined,
+          memory: summaryMemoryText || undefined,
+          difficulty: difficultyMode,
+          modelProfile,
+          language,
+          maxOutputTokens: normalizeTokenValue(outputTokens),
+          continueFrom: {
+            narrative: response.narrative,
+            raw: response.raw,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errBody.error ?? `HTTP ${res.status}`);
+      }
+
+      const data: GameResponse = await res.json();
+      if (data.memory_updates?.length) {
+        setMemoryItems((items) => mergeMemoryItems(items, data.memory_updates ?? [], "auto"));
+      }
+
+      setTurns((prev) => [
+        ...prev.map((turn, index) =>
+          index === turnIndex && turn.role === "assistant"
+            ? { ...turn, response: { ...turn.response, truncated: false } }
+            : turn,
+        ),
+        { role: "assistant", response: data },
+      ]);
+    } catch (err) {
+      setTurns((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          response: buildErrorResponse(err),
+        },
+      ]);
+    } finally {
+      setContinuingTurnIndex(null);
       setLoading(false);
     }
   }
@@ -2271,8 +2347,26 @@ export default function Home() {
                   return sceneImage ? <SceneImageCard image={sceneImage} /> : null;
                 })()}
                 <div className="rounded-lg bg-zinc-900 px-3.5 py-3 text-sm leading-relaxed whitespace-pre-wrap text-zinc-200">
+                  {t.response.continuation && (
+                    <div className="mb-2 inline-flex rounded border border-amber-400/35 bg-amber-950/20 px-2 py-1 text-[11px] font-medium text-amber-100">
+                      {text.bottom.continueGeneration}
+                    </div>
+                  )}
                   {t.response.narrative}
                 </div>
+                {t.response.truncated && (
+                  <div className="rounded-md border border-amber-500/25 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+                    <div className="mb-2 text-amber-200/90">{text.bottom.continueHint}</div>
+                    <button
+                      type="button"
+                      onClick={() => continueAssistantTurn(i, t.response)}
+                      disabled={loading || continuingTurnIndex !== null}
+                      className="rounded-md border border-amber-400/35 bg-black/35 px-3 py-1.5 font-medium text-amber-50 transition-colors hover:border-amber-300 hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {continuingTurnIndex === i ? text.bottom.continuing : text.bottom.continueGeneration}
+                    </button>
+                  </div>
+                )}
                 {t.response.briefing && (
                   <BriefingPanel
                     briefing={t.response.briefing}

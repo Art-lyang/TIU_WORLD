@@ -45,4 +45,7 @@ export type GameResponse = {
   raw: string;
   briefing?: GameBriefing;
   memory_updates?: string[];
+  truncated?: boolean;
+  continuation?: boolean;
+  continuation_of?: string;
 };
