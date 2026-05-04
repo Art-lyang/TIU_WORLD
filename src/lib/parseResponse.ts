@@ -1,9 +1,9 @@
 import type { GameResponse } from "@/types/game";
 
 const FALLBACK_CHOICES = [
-  { text: "주변을 더 살핀다" },
-  { text: "기록을 확인한다" },
-  { text: "그 자리를 떠난다" },
+  { text: "\"잠깐만요. 주변부터 다시 볼게요.\" 지금 보이는 단서를 살핀다." },
+  { text: "\"기록부터 맞춰보죠.\" 관련 로그와 문서를 확인한다." },
+  { text: "\"방금 무슨 일이 있었는지 정리하고 싶어요.\" 현재 상황을 다시 맞춰본다." },
 ];
 
 const CHOICES_HEADER_RE =

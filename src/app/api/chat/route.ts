@@ -200,7 +200,19 @@ const OPENING_FLOW_RULE = `Opening Flow Rule:
 - If the player creates a custom character, echo only the useful parts of the character sheet naturally. Do not dump the sheet as a block unless the player wrote it that way.
 - If age, money, or items were auto-filled, mention it briefly as a session calibration note, then move into the scene.
 - Introduce one practical contact when useful: editor, clerk, handler, instructor, dispatcher, guard, witness, or informant. The contact can ask a question, warn the player, or hand over a file.
+- Preserve hidden canon: do not expose secret faction names, entity identities, or internal codes in the opening unless the player character would already know them. Use public-facing labels first.
 - The final choices should feel like the character's next plausible actions, not generic menu commands.`;
+
+const CONVERSATIONAL_PLAY_RULE = `Conversational Play Rule:
+- The session should feel like the player is talking with people inside a scene, not clicking a dry command list.
+- Before [Choices], end the visible scene with a human handoff whenever possible: an NPC question, hesitation, warning, glance, message, or system prompt that naturally invites the player's reply.
+- If an NPC just spoke, give them a small emotional beat or direct question before choices. Example: "임태오가 당신 표정을 살피며 묻습니다. '어때, 무슨 말인지 이해했어?'"
+- Choices should read like natural intentions, replies, or specific actions. Prefer "그럼 변경 로그부터 볼게요. 임태오에게 요청한다" over "변경 로그를 확인한다".
+- Include at least one choice that is a spoken reply when a conversation partner is present.
+- Avoid ending a turn on a cold fact, state dump, or clue sentence without giving the player a social or emotional way back into the scene.
+- If a scene has no visible NPC, create a human-scale contact point: a caller, sender, desk clerk, field operator, archived voice note, terminal prompt, or the player's own uneasy thought.
+- Every generated choice should answer the last human pressure in the scene: reply to the speaker, ask a follow-up, protect someone, challenge a claim, buy time, or act while telling someone what you are doing.
+- Avoid choices that are only nouns or commands such as "기록 확인", "이동", "조사한다", "Open file", or "Continue".`;
 
 const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - Treat the first user message, selected route, character job, player memo, and summary memory as the active session anchor.
@@ -215,6 +227,35 @@ const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - The Korean Barrier child-voice complaint belongs only to the Korean Barrier civilian route unless the player explicitly connects it to another case.
 - A Midas-Hand reporter or urban-legend journalist session should stay centered on Midas-Hand leads: deleted articles, suspicious contracts, informants, ownership records, money trails, cult rumors, and public-facing conspiracy evidence.
 - If earlier assistant text accidentally introduced a mismatched starter incident, treat it as a misfiled queue item or corrupted feed, then return to the active character's case without making the player repair the continuity.`;
+
+function withSessionPrelude(response: GameResponse, language: ResponseLanguage, routeName?: string | null): GameResponse {
+  const isAntarctic = /남극|거대공동|L3|Antarctic|Hollow/i.test(routeName ?? response.raw ?? response.narrative);
+  const prelude = language === "en"
+    ? isAntarctic
+      ? `[Session Entry]
+January 2032. The access terminal opens only the public layer of the assignment: Antarctic hollow survey, contract review, field safety.
+
+The classified name of the site is withheld. For now, the world gives you weather reports, changed coordinates, and one dispatch order that arrived before it was approved.`
+      : `[Session Entry]
+January 2032. The world does not begin by explaining itself. It gives you a role, a device or room, and one record that should not already know you.
+
+The deeper truth remains sealed. Your first useful thread is small enough to touch: a message, a file, a witness, or a place waiting for confirmation.`
+    : isAntarctic
+      ? `[Session Entry]
+2032년 1월. 접속 단말기는 이번 배정의 공개 층위만 엽니다. 남극 거대공동 조사, 계약 검토, 현장 안전 확인.
+
+현장의 내부 코드명과 원인은 아직 열람되지 않습니다. 지금 당신에게 보이는 것은 기상 보고, 어긋난 좌표, 승인보다 먼저 도착한 파견 명령뿐입니다.`
+      : `[Session Entry]
+2032년 1월. 세계는 처음부터 정답을 설명하지 않습니다. 먼저 당신에게 역할과 장소, 그리고 당신을 이미 알고 있는 듯한 기록 하나를 건넵니다.
+
+더 깊은 진실은 아직 잠겨 있습니다. 지금 붙잡을 수 있는 첫 실마리는 메시지, 파일, 목격자, 혹은 확인을 기다리는 장소입니다.`;
+
+  return {
+    ...response,
+    narrative: `${prelude}\n\n${response.narrative}`,
+    raw: `${prelude}\n\n${response.raw}`,
+  };
+}
 
 function buildRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage): string {
   const source = messages.map((message) => message.content).join("\n");
@@ -247,17 +288,19 @@ function buildRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage)
 - 기록, 호출, 공식 이관 없이 무관한 현장 공포 장면으로 이동하지 않는다.`;
   }
 
-  if (/L3|현장\s*파견|진입\s*경로|지도\s*단말기|field dispatch|entry route|field analyst/i.test(source)) {
+  if (/L3|남극|거대공동|극지|현장\s*파견|진입\s*경로|지도\s*단말기|field dispatch|antarctic|hollow|entry route|field analyst/i.test(source)) {
     return language === "en"
-      ? `Route Playbook: L3 Field Dispatch
+      ? `Route Playbook: Antarctic Hollow Field Dispatch
 - Core loop: dispatch order -> map mismatch -> route/version check -> field contact -> boundary consequence.
 - Recurring contacts: Tae-o Lim, instructor, dispatch controller, escort team.
 - Keep tension spatial and procedural: wrong roads, changed signs, missing approvals, quarantine timing.
+- Do not reveal the internal site code in opening narration unless the player discovers it through a record.
 - Choices should preserve field judgment: verify, compare, mark coordinates, call support, decide whether to move.`
-      : `Route Playbook: L3 현장 파견
+      : `Route Playbook: 남극 거대공동 현장 파견
 - 핵심 루프: 파견 지시 -> 지도 불일치 -> 경로/버전 확인 -> 현장 접점 -> 경계 결과.
 - 반복 접점: 임태오, 강사, 파견 통제관, 동행 팀.
 - 긴장은 공간적/절차적으로 유지한다: 틀린 도로, 바뀐 표지판, 빈 승인란, 격리 시간.
+- 시작 장면에서는 내부 코드명이나 숨겨진 정체를 노출하지 말고 공개 명칭인 남극 거대공동 조사로 부른다.
 - 선택지는 확인, 대조, 좌표 기록, 지원 호출, 이동 판단처럼 현장 행동으로 만든다.`;
   }
 
@@ -324,13 +367,13 @@ function buildSessionAnchor(messages: ChatMessage[], language: ResponseLanguage)
 - 삭제 문서, 복원 로그, 열람 등급 불일치, 접속 흔적을 중심으로 진행한다.`;
   }
 
-  if (/L3|현장 파견|field support|field analyst/i.test(source)) {
+  if (/L3|남극|거대공동|극지|현장 파견|field support|field analyst|antarctic|hollow/i.test(source)) {
     return language === "en"
       ? `Active Session Anchor:
-- Route: L3 field dispatch.
+- Route: Antarctic hollow field dispatch.
 - Keep the story centered on route errors, map/reality mismatch, quarantine pressure, and field-team judgment.`
       : `Active Session Anchor:
-- 루트: L3 현장 파견.
+- 루트: 남극 거대공동 현장 파견.
 - 진입 경로 오류, 지도와 현실의 불일치, 격리 압박, 현장 판단을 중심으로 진행한다.`;
   }
 
@@ -365,8 +408,8 @@ const STARTER_ROUTE_HINTS = [
     label: "KR-INIT-001 잔여 문서 기록 관리자",
   },
   {
-    pattern: /L3|현장\s*파견|계약\s*분석관|L3_FIELD_ANALYST/i,
-    label: "L3 현장 파견 계약 분석관",
+    pattern: /L3|남극|거대공동|극지|현장\s*파견|계약\s*분석관|L3_FIELD_ANALYST/i,
+    label: "남극 거대공동 현장 파견 계약 분석관",
   },
 ] as const;
 
@@ -381,7 +424,7 @@ function detectStarterRoute(input: string): string | null {
   const numericRoute = input.trim().match(/^([1-4])(?:[.)])?$/)?.[1];
   if (numericRoute === "1") return "한국 방벽 내부 민간 조사 보조원";
   if (numericRoute === "2") return "KR-INIT-001 잔여 문서 기록 관리자";
-  if (numericRoute === "3") return "L3 현장 파견 계약 분석관";
+  if (numericRoute === "3") return "남극 거대공동 현장 파견 계약 분석관";
 
   const route = STARTER_ROUTE_HINTS.find((hint) => hint.pattern.test(input));
   return route?.label ?? null;
@@ -557,7 +600,11 @@ function extractGroups(text: string, messages: ChatMessage[], language: Response
   if (/마이더스손|midas/i.test(source)) groups.push(language === "en" ? "Midas-Hand: Investigation Target" : "마이더스손: 조사 대상");
   if (/방벽|생활구|barrier|living zone/i.test(source)) groups.push(language === "en" ? "Inside the Barrier: Active Incident Zone" : "방벽 내부: 현재 사건 권역");
   if (/KR-?INIT-?001/i.test(source)) groups.push(language === "en" ? "KR-INIT-001: Contradictory Record" : "KR-INIT-001: 불일치 기록");
-  if (/L3/.test(source)) groups.push(language === "en" ? "L3: Field Dispatch Zone" : "L3: 현장 파견 권역");
+  if (/남극|거대공동|극지|Antarctic|Hollow/i.test(source)) {
+    groups.push(language === "en" ? "Antarctic Hollow: Survey Zone" : "남극 거대공동: 조사 권역");
+  } else if (/L3/.test(source) && !/^START_ROUTE:L3_FIELD_ANALYST\s*$/m.test(source)) {
+    groups.push(language === "en" ? "Restricted Field Dispatch Zone" : "제한 현장 파견 권역");
+  }
   if (/소바리|Sovari/i.test(source)) groups.push(language === "en" ? "Sovari: Peripheral Investigation Zone" : "소바리: 주변부 조사 권역");
 
   return Array.from(new Set(groups)).slice(0, 6);
@@ -620,7 +667,7 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
   }
   if (/강사|instructor/i.test(source)) {
     people.push({
-      name: language === "en" ? "L3 Instructor" : "L3 강사",
+      name: language === "en" ? "Field Instructor" : "현장 강사",
       emotion: language === "en" ? "Controlled" : "통제",
       detail: language === "en" ? "Knows procedure / avoids direct answers" : "절차 숙지 / 직접 답변 회피",
       trust: language === "en" ? "Official but evasive" : "공식적이나 회피적",
@@ -740,7 +787,7 @@ function extractClues(text: string, messages: ChatMessage[], language: ResponseL
   if (/세 번째 표지판|third sign/i.test(source)) {
     addClue(clues, {
       title: language === "en" ? "Third Sign Warning" : "세 번째 표지판 경고",
-      detail: language === "en" ? "A handwritten warning appears on page 17 of the L3 material." : "L3 교육 자료 17쪽에 돌아오지 말라는 필체가 남아 있다.",
+      detail: language === "en" ? "A handwritten warning appears on page 17 of the field material." : "현장 교육 자료 17쪽에 돌아오지 말라는 필체가 남아 있다.",
       status: language === "en" ? "Route hazard" : "경로 위험",
       source: language === "en" ? "Training page 17" : "교육 자료 17쪽",
     });
@@ -817,7 +864,7 @@ function inferMemoryUpdates(response: Pick<GameResponse, "raw" | "narrative">, m
     updates.push("KR-INIT-001은 복원 상태와 열람 등급이 불일치하는 잔여 문서다.");
   }
   if (/세 번째 표지판/.test(text)) {
-    updates.push("L3 교육 자료 17쪽에 '세 번째 표지판을 보면 돌아오지 마라'가 적혀 있다.");
+    updates.push("현장 교육 자료 17쪽에 '세 번째 표지판을 보면 돌아오지 마라'가 적혀 있다.");
   }
   if (/우리는 아직 출발하지 않았다/.test(text)) {
     updates.push("소바리 조사팀의 마지막 무전은 내일 오후 시각으로 기록되어 있다.");
@@ -907,9 +954,9 @@ function extractGoals(response: Pick<GameResponse, "choices" | "narrative" | "ra
       ];
     }
 
-    if (/L3|field dispatch|instructor|entry route/i.test(source)) {
+    if (/L3|남극|거대공동|field dispatch|instructor|entry route|antarctic|hollow/i.test(source)) {
       return [
-        "The instructor is avoiding the real answer. I should compare the route records before trusting anything on that map.",
+        "The instructor is waiting for my answer. I should ask Tae-o for the route log before pretending I understand that map.",
       ];
     }
 
@@ -945,9 +992,9 @@ function extractGoals(response: Pick<GameResponse, "choices" | "narrative" | "ra
     ];
   }
 
-  if (/L3|현장 파견|강사|진입 경로|세 번째 표지판/i.test(source)) {
+  if (/L3|남극|거대공동|현장 파견|강사|진입 경로|세 번째 표지판/i.test(source)) {
     return [
-      "강사는 알고도 모른 척하는 얼굴이야. 지도보다 사람들 책자를 먼저 맞춰보면, 어느 쪽이 틀어진 건지 드러날지도 몰라.",
+      "강사가 내 대답을 기다리고 있어. 이해한 척하기 전에 임태오에게 변경 로그부터 받아보는 게 나을지도 몰라.",
     ];
   }
 
@@ -993,18 +1040,142 @@ function buildBriefing(response: Pick<GameResponse, "raw" | "narrative" | "choic
   };
 }
 
+type ConversationContact = {
+  pattern: RegExp;
+  koPrompt: string;
+  enPrompt: string;
+};
+
+const CONVERSATION_CONTACTS: ConversationContact[] = [
+  {
+    pattern: /임태오|Tae-o|진입 경로|지도 단말기|entry route|map terminal/i,
+    koPrompt: `임태오가 단말기 밝기를 낮추고 당신을 봅니다. "지금 바로 경로부터 볼까요, 아니면 먼저 물어볼 게 있습니까?"`,
+    enPrompt: `Tae-o lowers the map terminal brightness and looks at you. "Do we check the route now, or is there something you need to ask first?"`,
+  },
+  {
+    pattern: /강사|Field Instructor|instructor|세 번째 표지판/i,
+    koPrompt: `강사가 말을 멈추고 당신 표정을 살핍니다. "괜찮습니다. 이해한 척하지 말고, 걸리는 부분이 있으면 지금 물어보세요."`,
+    enPrompt: `The instructor stops and studies your face. "It's fine. Don't pretend you understood it. Ask now if something bothers you."`,
+  },
+  {
+    pattern: /윤서하|Seo-ha|CMS|초안|마이더스|Midas/i,
+    koPrompt: `윤서하가 통화 너머로 숨을 고릅니다. "너 혼자 판단하지 말고 말해. 내가 먼저 열어줄 건 뭐야?"`,
+    enPrompt: `Seo-ha exhales through the call. "Don't decide alone. Tell me what you want me to open first."`,
+  },
+  {
+    pattern: /AfterGold_0310|제보자|informant/i,
+    koPrompt: `제보자의 DM 창에 입력 중 표시가 깜빡입니다. "아직 거기 있습니까. 뭘 먼저 확인할 겁니까?"`,
+    enPrompt: `The informant's DM bubble flickers. "Are you still there? What are you checking first?"`,
+  },
+  {
+    pattern: /오연주|Yeon-ju|기록보안|복원 로그|열람 등급|archive|restoration log|clearance/i,
+    koPrompt: `오연주가 권한 창 위에 손을 올린 채 묻습니다. "열까요, 아니면 누가 복원했는지부터 볼까요?"`,
+    enPrompt: `Yeon-ju keeps one hand over the authorization panel. "Do we open it, or check who restored it first?"`,
+  },
+  {
+    pattern: /박민재|Min-jae|신고자|생활구|방벽|caller|living zone|barrier/i,
+    koPrompt: `박민재가 접수창 너머로 낮게 묻습니다. "바로 사람에게 걸어볼까요, 아니면 기록부터 맞춰볼까요?"`,
+    enPrompt: `Min-jae leans closer behind the civil desk. "Do we call the person first, or line up the records?"`,
+  },
+  {
+    pattern: /나로|Naro|소바리|Sovari|무전|radio|ridge/i,
+    koPrompt: `나로 노인이 무전기 소리를 줄입니다. "지금 듣고 싶은 건 사람 말이오, 아니면 저 산 쪽 소리요?"`,
+    enPrompt: `Elder Naro lowers the radio volume. "Do you want a human answer first, or the sound from the ridge?"`,
+  },
+];
+
+function detectConversationContact(source: string): ConversationContact | null {
+  return CONVERSATION_CONTACTS.find((contact) => contact.pattern.test(source)) ?? null;
+}
+
+function hasConversationalHandoff(narrative: string): boolean {
+  const tail = narrative
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-6)
+    .join("\n");
+
+  return /[?？]\s*["'”’)]?\s*$/.test(tail)
+    || /묻습니다|묻는다|말합니다|말한다|물어봅니다|메시지를 보냅니다|기다립니다|asks|says|waits|texts/i.test(tail);
+}
+
+function ensureConversationalHandoff(
+  narrative: string,
+  response: Pick<GameResponse, "raw" | "choices">,
+  messages: ChatMessage[],
+  language: ResponseLanguage,
+): string {
+  if (!narrative.trim() || hasConversationalHandoff(narrative)) return narrative;
+
+  const source = `${messages.map((message) => message.content).join("\n")}\n${response.raw}\n${narrative}`;
+  const contact = detectConversationContact(source);
+  const prompt = contact
+    ? language === "en" ? contact.enPrompt : contact.koPrompt
+    : language === "en"
+      ? `You take a breath and feel the scene waiting for an answer. What do you say or do first?`
+      : `당신은 잠깐 숨을 고릅니다. 지금 무엇을 말하고, 무엇을 먼저 붙잡을지 결정해야 합니다.`;
+
+  return `${narrative.trimEnd()}\n\n${prompt}`;
+}
+
+function isConversationalChoice(text: string): boolean {
+  return /["“”'‘’]/.test(text)
+    || /[?？]/.test(text)
+    || /볼게|볼까요|할게|할까요|주세요|부탁|말한다|묻는다|물어|대답|답한다|요청|제가|잠깐|ask|tell|say|reply|request|let me|i'll|i will|should i/i.test(text);
+}
+
+function humanizeChoiceText(text: string, language: ResponseLanguage): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean || isConversationalChoice(clean)) return clean;
+
+  if (language === "en") {
+    const lower = clean.toLowerCase();
+    if (/route|coordinate|map|change|version/.test(lower)) return `"Show me what changed first." ${clean}`;
+    if (/record|log|document|file|archive|restore|clearance/.test(lower)) return `"Let's line up the records first." ${clean}`;
+    if (/caller|informant|contact|call|message/.test(lower)) return `"I'll hear it directly." ${clean}`;
+    if (/ask|question/.test(lower)) return `"I'll ask that directly." ${clean}`;
+    if (/look|search|around|inspect/.test(lower)) return `"Hold on. I want to look around first." ${clean}`;
+    if (/move|go|enter|leave|head/.test(lower)) return `"I'll go myself. Keep the route open." ${clean}`;
+    if (/review|summarize|think/.test(lower)) return `"Give me one second to line this up." ${clean}`;
+    return `"All right. Let me try this first." ${clean}`;
+  }
+
+  if (/변경|경로|좌표|지도|버전/.test(clean)) return `"변경된 부분부터 보여주세요." ${clean}`;
+  if (/기록|로그|문서|자료|파일|열람|복원|등급/.test(clean)) return `"기록부터 맞춰볼게요." ${clean}`;
+  if (/신고자|제보자|연락|전화|메시지|DM/.test(clean)) return `"제가 직접 들어볼게요." ${clean}`;
+  if (/묻|질문/.test(clean)) return `"그 부분은 제가 물어보겠습니다." ${clean}`;
+  if (/주변|살핀|둘러|수색|조사/.test(clean)) return `"잠깐만요. 주변부터 다시 볼게요." ${clean}`;
+  if (/이동|향한다|간다|들어간다|나간다/.test(clean)) return `"직접 가보겠습니다. 대신 경로는 열어두세요." ${clean}`;
+  if (/정리|생각/.test(clean)) return `"한 번만 정리하고 움직일게요." ${clean}`;
+  return `"좋아요. 제가 먼저 해볼게요." ${clean}`;
+}
+
+function applyConversationalLayer(response: GameResponse, messages: ChatMessage[], language: ResponseLanguage): GameResponse {
+  const narrative = ensureConversationalHandoff(stripSystemLog(response.narrative), response, messages, language);
+  const choices = response.choices.map((choice) => ({
+    text: humanizeChoiceText(choice.text, language),
+  }));
+
+  return {
+    ...response,
+    narrative,
+    choices,
+  };
+}
+
 function withBriefing(response: GameResponse, messages: ChatMessage[], language: ResponseLanguage = "ko"): GameResponse {
+  const conversationalResponse = applyConversationalLayer(response, messages, language);
   const memory_updates = Array.from(
     new Set([
-      ...(response.memory_updates ?? []),
-      ...inferMemoryUpdates(response, messages),
+      ...(conversationalResponse.memory_updates ?? []),
+      ...inferMemoryUpdates(conversationalResponse, messages),
     ].map(normalizeMemoryUpdate).filter(Boolean)),
   ).slice(0, 3);
 
   return {
-    ...response,
-    narrative: stripSystemLog(response.narrative),
-    briefing: buildBriefing(response, messages, language),
+    ...conversationalResponse,
+    briefing: buildBriefing(conversationalResponse, messages, language),
     memory_updates,
   };
 }
@@ -1041,6 +1212,11 @@ ${completed.note}
 자기 기록의 소유권을 넘긴 겁니다.
 오늘 03:10 전에 라커를 열지 않으면, 당신 기사도 누군가의 이름으로 발행됩니다."
 
+윤서하가 다시 메시지를 보냅니다.
+
+"지금 이거 장난 아니지?
+너 먼저 어디부터 볼 거야. 내가 열어줄 수 있는 건 하나야."
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
@@ -1050,59 +1226,66 @@ Visible Classification: 민간 괴담 / 확인 보류`;
     const raw = `${narrative}
 
 [Choices]
-1. 삭제된 기사 초안의 복구 로그를 확인한다.
-2. 윤서하에게 협찬 제안서 원본을 보내달라고 한다.
-3. 제보자 계정 AfterGold_0310의 접속 위치를 추적한다.
-4. 폐상가 3층 라커 17번으로 향한다.`;
+1. "복구 로그부터 열어줘." 삭제된 기사 초안을 확인한다.
+2. "협찬 제안서 원본이 먼저야." 윤서하에게 파일을 요청한다.
+3. "제보자가 어디서 보냈는지 볼게." AfterGold_0310의 접속 위치를 추적한다.
+4. "라커가 미끼여도 직접 확인해야 해." 폐상가 3층으로 향한다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "삭제된 기사 초안의 복구 로그를 확인한다." },
-        { text: "윤서하에게 협찬 제안서 원본을 보내달라고 한다." },
-        { text: "제보자 계정 AfterGold_0310의 접속 위치를 추적한다." },
-        { text: "폐상가 3층 라커 17번으로 향한다." },
+        { text: "\"복구 로그부터 열어줘.\" 삭제된 기사 초안을 확인한다." },
+        { text: "\"협찬 제안서 원본이 먼저야.\" 윤서하에게 파일을 요청한다." },
+        { text: "\"제보자가 어디서 보냈는지 볼게.\" AfterGold_0310의 접속 위치를 추적한다." },
+        { text: "\"라커가 미끼여도 직접 확인해야 해.\" 폐상가 3층으로 향한다." },
       ],
       allow_freeform: true,
       raw,
     }, briefingMessages);
   }
 
-  if (/L3|현장\s*지원|현장\s*파견|지도\s*단말기|field\s*support|field\s*analyst/i.test(character)) {
+  if (/L3|남극|거대공동|극지|현장\s*지원|현장\s*파견|지도\s*단말기|field\s*support|field\s*analyst|antarctic|hollow/i.test(character)) {
     const narrative = `[Scene]
 ${identityLine}
 ${completed.note}
 
-파견 대기실의 전광판에는 당신 이름 대신 임시 호출 부호가 떠 있습니다.
+극지 현장 파견 대기실의 전광판에는 당신 이름 대신 임시 호출 부호가 떠 있습니다.
+공개 임무명은 남극 거대공동 조사 지원. 내부 코드명과 원인 항목은 검은 칸으로 가려져 있습니다.
+
 현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
 
 "네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
 문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
 
-단말기 화면에는 L3 진입 경로가 표시됩니다. 같은 도로가 확대할 때마다 조금씩 다른 위치에 놓이고, 교육 자료 17쪽에는 다른 사람의 필체로 한 줄이 적혀 있습니다.
+단말기 화면에는 남극 조사 지점의 진입 경로가 표시됩니다. 같은 빙하 균열이 확대할 때마다 조금씩 다른 위치에 놓이고, 교육 자료 17쪽에는 다른 사람의 필체로 한 줄이 적혀 있습니다.
 
 "세 번째 표지판을 보면 돌아오지 마라."
+
+임태오가 단말기를 놓지 않은 채 당신 표정을 살핍니다.
+
+"이해한 척하지 말고 말해.
+지금 네가 먼저 확인하고 싶은 거, 경로야? 아니면 이 문장이야?"
 
 [State]
 Disclosure Level: RESTRICTED
 Boundary Stability: 흔들림
-Visible Classification: 관찰`;
+Visible Classification: 남극 거대공동 조사 / 확인 전`;
 
     const raw = `${narrative}
 
 [Choices]
-1. 임태오에게 경로 변경 로그를 보내달라고 한다.
-2. 교육 자료 17쪽의 필체와 배포 기록을 확인한다.
-3. L3 진입 경로의 이전 버전을 조회한다.
-4. 지도 단말기의 현재 좌표를 사진으로 남긴다.`;
+1. "경로부터 볼게요. 변경 로그 보내주세요." 임태오에게 요청한다.
+2. "17쪽 문장부터 확인해야겠어요." 필체와 배포 기록을 대조한다.
+3. "이전 경로 버전이 남아 있나요?" 단말기의 변경 전 좌표를 조회한다.
+4. 말없이 현재 좌표를 사진으로 남기고, 임태오의 반응을 본다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "임태오에게 경로 변경 로그를 보내달라고 한다." },
-        { text: "교육 자료 17쪽의 필체와 배포 기록을 확인한다." },
-        { text: "L3 진입 경로의 이전 버전을 조회한다." },
-        { text: "지도 단말기의 현재 좌표를 사진으로 남긴다." },
+        { text: "\"경로부터 볼게요. 변경 로그 보내주세요.\" 임태오에게 요청한다." },
+        { text: "\"17쪽 문장부터 확인해야겠어요.\" 필체와 배포 기록을 대조한다." },
+        { text: "\"이전 경로 버전이 남아 있나요?\" 단말기의 변경 전 좌표를 조회한다." },
+        { text: "말없이 현재 좌표를 사진으로 남기고, 임태오의 반응을 본다." },
       ],
       allow_freeform: true,
       raw,
@@ -1128,6 +1311,11 @@ KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
 "첫 대응은 실패하지 않았다. 성공했기 때문에 묻혔다."
 
+오연주가 모니터를 끄지 않은 채 당신을 봅니다.
+
+"이거 열면 네 계정에 흔적이 남아.
+그래도 직접 볼 거야, 아니면 내가 먼저 권한 쪽을 건드려볼까?"
+
 [State]
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정`;
@@ -1135,18 +1323,18 @@ Boundary Stability: 안정`;
     const raw = `${narrative}
 
 [Choices]
-1. 오연주에게 복원 요청자 확인 권한을 요청한다.
-2. 복원 로그를 먼저 확인한다.
-3. 열람 등급 불일치 사유를 조회한다.
-4. 화면을 캡처한 뒤 접속을 끊는다.`;
+1. "권한부터 부탁드립니다." 오연주에게 요청자 확인을 열어달라고 한다.
+2. "흔적 남아도 복원 로그를 먼저 볼게요." 로그를 연다.
+3. "등급이 왜 틀렸는지부터 보죠." 열람 등급 사유를 조회한다.
+4. 말없이 화면을 캡처하고 접속을 끊을 준비를 한다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "오연주에게 복원 요청자 확인 권한을 요청한다." },
-        { text: "복원 로그를 먼저 확인한다." },
-        { text: "열람 등급 불일치 사유를 조회한다." },
-        { text: "화면을 캡처한 뒤 접속을 끊는다." },
+        { text: "\"권한부터 부탁드립니다.\" 오연주에게 요청자 확인을 열어달라고 한다." },
+        { text: "\"흔적 남아도 복원 로그를 먼저 볼게요.\" 로그를 연다." },
+        { text: "\"등급이 왜 틀렸는지부터 보죠.\" 열람 등급 사유를 조회한다." },
+        { text: "말없이 화면을 캡처하고 접속을 끊을 준비를 한다." },
       ],
       allow_freeform: true,
       raw,
@@ -1169,6 +1357,11 @@ ${completed.note}
 "어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
 그 집에는 아이가 없습니다."
 
+박민재가 당신에게 수화기를 밀어놓고 묻습니다.
+
+"바로 전화할래?
+아니면 기록부터 맞춰보고, 사람이 거짓말하는 건지 시스템이 빠뜨린 건지 보겠어?"
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
@@ -1177,18 +1370,18 @@ Visible Classification: 주민 신고 / 확인 필요`;
     const raw = `${narrative}
 
 [Choices]
-1. 박민재에게 이전 유사 신고가 있었는지 묻는다.
-2. 신고자에게 먼저 전화한다.
-3. 옆집 주소의 거주 기록을 조회한다.
-4. 현장 동행 요청을 넣는다.`;
+1. "비슷한 신고가 있었나요?" 박민재에게 먼저 묻는다.
+2. "제가 바로 전화해볼게요." 신고자에게 연락한다.
+3. "기록부터 맞춰보죠." 옆집 주소의 거주 기록을 조회한다.
+4. "혼자 가긴 찜찜합니다." 현장 동행 요청을 넣는다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "박민재에게 이전 유사 신고가 있었는지 묻는다." },
-        { text: "신고자에게 먼저 전화한다." },
-        { text: "옆집 주소의 거주 기록을 조회한다." },
-        { text: "현장 동행 요청을 넣는다." },
+        { text: "\"비슷한 신고가 있었나요?\" 박민재에게 먼저 묻는다." },
+        { text: "\"제가 바로 전화해볼게요.\" 신고자에게 연락한다." },
+        { text: "\"기록부터 맞춰보죠.\" 옆집 주소의 거주 기록을 조회한다." },
+        { text: "\"혼자 가긴 찜찜합니다.\" 현장 동행 요청을 넣는다." },
       ],
       allow_freeform: true,
       raw,
@@ -1212,6 +1405,11 @@ ${completed.note}
 
 무전 기록의 시간은 내일 오후로 찍혀 있습니다.
 
+나로 노인이 무전기 볼륨을 줄이며 묻습니다.
+
+"그래도 산으로 갈 건가.
+아니면 먼저, 저 목소리가 어디서 다시 살아났는지 볼 건가."
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
@@ -1220,18 +1418,18 @@ Visible Classification: 실종 조사 / 시간 기록 오류`;
     const raw = `${narrative}
 
 [Choices]
-1. 나로 노인에게 산 능선의 빛에 대해 묻는다.
-2. 마지막 무전 좌표를 지도에 표시한다.
-3. 조사팀 출발 기록을 확인한다.
-4. 무전 원본 파일을 복사한다.`;
+1. "저 빛을 본 사람이 또 있습니까?" 나로 노인에게 묻는다.
+2. "좌표부터 찍어두겠습니다." 마지막 무전 위치를 지도에 표시한다.
+3. "그 사람들이 정말 출발했는지부터 보죠." 출발 기록을 확인한다.
+4. 말없이 무전 원본을 복사하고, 재생 시간을 다시 본다.`;
 
     return withBriefing({
       narrative,
       choices: [
-        { text: "나로 노인에게 산 능선의 빛에 대해 묻는다." },
-        { text: "마지막 무전 좌표를 지도에 표시한다." },
-        { text: "조사팀 출발 기록을 확인한다." },
-        { text: "무전 원본 파일을 복사한다." },
+        { text: "\"저 빛을 본 사람이 또 있습니까?\" 나로 노인에게 묻는다." },
+        { text: "\"좌표부터 찍어두겠습니다.\" 마지막 무전 위치를 지도에 표시한다." },
+        { text: "\"그 사람들이 정말 출발했는지부터 보죠.\" 출발 기록을 확인한다." },
+        { text: "말없이 무전 원본을 복사하고, 재생 시간을 다시 본다." },
       ],
       allow_freeform: true,
       raw,
@@ -1254,6 +1452,10 @@ ${completed.note}
 
 기록의 생성 시각은 지금보다 9분 뒤입니다. 지도에는 도착지가 보이지 않지만, 당신의 소지품 중 하나가 아주 짧게 진동합니다.
 
+단말기 하단에 짧은 확인 문구가 떠오릅니다.
+
+"이 기록을 당신의 첫 사건으로 열람합니까?"
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
@@ -1262,18 +1464,18 @@ Visible Classification: 개인 기록 오류 / 확인 필요`;
   const raw = `${narrative}
 
 [Choices]
-1. 방금 생성된 이동 기록의 원본 로그를 확인한다.
-2. 현재 위치 주변에서 미등록 도착지 단서를 찾는다.
-3. 진동한 소지품을 꺼내 확인한다.
-4. 캐릭터의 소속과 현재 목적을 더 구체적으로 정한다.`;
+1. "열람한다." 방금 생성된 이동 기록의 원본 로그를 확인한다.
+2. "아직 열지 말고 주변부터 보자." 현재 위치의 단서를 찾는다.
+3. 먼저 진동한 소지품을 꺼내 확인한다.
+4. "내가 왜 여기에 있는지부터 정리하자." 소속과 목적을 더 구체화한다.`;
 
   return withBriefing({
     narrative,
     choices: [
-      { text: "방금 생성된 이동 기록의 원본 로그를 확인한다." },
-      { text: "현재 위치 주변에서 미등록 도착지 단서를 찾는다." },
-      { text: "진동한 소지품을 꺼내 확인한다." },
-      { text: "캐릭터의 소속과 현재 목적을 더 구체적으로 정한다." },
+      { text: "\"열람한다.\" 방금 생성된 이동 기록의 원본 로그를 확인한다." },
+      { text: "\"아직 열지 말고 주변부터 보자.\" 현재 위치의 단서를 찾는다." },
+      { text: "먼저 진동한 소지품을 꺼내 확인한다." },
+      { text: "\"내가 왜 여기에 있는지부터 정리하자.\" 소속과 목적을 더 구체화한다." },
     ],
     allow_freeform: true,
     raw,
@@ -1297,15 +1499,20 @@ const STARTER_ROUTE_OPENINGS: Record<string, GameResponse> = {
 "어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
 그 집에는 아이가 없습니다."
 
+박민재가 당신에게 수화기를 밀어놓고 묻습니다.
+
+"바로 전화할래?
+아니면 기록부터 맞춰보고, 사람이 거짓말하는 건지 시스템이 빠뜨린 건지 보겠어?"
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
 Visible Classification: 주민 신고 / 확인 필요`,
     choices: [
-      { text: "박민재에게 이전 유사 신고가 있었는지 묻는다." },
-      { text: "신고자에게 먼저 전화한다." },
-      { text: "옆집 주소의 거주 기록을 조회한다." },
-      { text: "현장 동행 요청을 넣는다." },
+      { text: "\"비슷한 신고가 있었나요?\" 박민재에게 먼저 묻는다." },
+      { text: "\"제가 바로 전화해볼게요.\" 신고자에게 연락한다." },
+      { text: "\"기록부터 맞춰보죠.\" 옆집 주소의 거주 기록을 조회한다." },
+      { text: "\"혼자 가긴 찜찜합니다.\" 현장 동행 요청을 넣는다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
@@ -1323,16 +1530,21 @@ Visible Classification: 주민 신고 / 확인 필요`,
 "어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
 그 집에는 아이가 없습니다."
 
+박민재가 당신에게 수화기를 밀어놓고 묻습니다.
+
+"바로 전화할래?
+아니면 기록부터 맞춰보고, 사람이 거짓말하는 건지 시스템이 빠뜨린 건지 보겠어?"
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
 Visible Classification: 주민 신고 / 확인 필요
 
 [Choices]
-1. 박민재에게 이전 유사 신고가 있었는지 묻는다.
-2. 신고자에게 먼저 전화한다.
-3. 옆집 주소의 거주 기록을 조회한다.
-4. 현장 동행 요청을 넣는다.`,
+1. "비슷한 신고가 있었나요?" 박민재에게 먼저 묻는다.
+2. "제가 바로 전화해볼게요." 신고자에게 연락한다.
+3. "기록부터 맞춰보죠." 옆집 주소의 거주 기록을 조회한다.
+4. "혼자 가긴 찜찜합니다." 현장 동행 요청을 넣는다.`,
   },
   "KR-INIT-001 잔여 문서 기록 관리자": {
     narrative: `[Scene]
@@ -1352,14 +1564,19 @@ KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
 "첫 대응은 실패하지 않았다. 성공했기 때문에 묻혔다."
 
+오연주가 모니터를 끄지 않은 채 당신을 봅니다.
+
+"이거 열면 네 계정에 흔적이 남아.
+그래도 직접 볼 거야, 아니면 내가 먼저 권한 쪽을 건드려볼까?"
+
 [State]
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정`,
     choices: [
-      { text: "오연주에게 복원 요청자 확인 권한을 요청한다." },
-      { text: "복원 로그를 먼저 확인한다." },
-      { text: "열람 등급 불일치 사유를 조회한다." },
-      { text: "화면을 캡처한 뒤 접속을 끊는다." },
+      { text: "\"권한부터 부탁드립니다.\" 오연주에게 요청자 확인을 열어달라고 한다." },
+      { text: "\"흔적 남아도 복원 로그를 먼저 볼게요.\" 로그를 연다." },
+      { text: "\"등급이 왜 틀렸는지부터 보죠.\" 열람 등급 사유를 조회한다." },
+      { text: "말없이 화면을 캡처하고 접속을 끊을 준비를 한다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
@@ -1379,27 +1596,34 @@ KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
 
 "첫 대응은 실패하지 않았다. 성공했기 때문에 묻혔다."
 
+오연주가 모니터를 끄지 않은 채 당신을 봅니다.
+
+"이거 열면 네 계정에 흔적이 남아.
+그래도 직접 볼 거야, 아니면 내가 먼저 권한 쪽을 건드려볼까?"
+
 [State]
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정
 
 [Choices]
-1. 오연주에게 복원 요청자 확인 권한을 요청한다.
-2. 복원 로그를 먼저 확인한다.
-3. 열람 등급 불일치 사유를 조회한다.
-4. 화면을 캡처한 뒤 접속을 끊는다.`,
+1. "권한부터 부탁드립니다." 오연주에게 요청자 확인을 열어달라고 한다.
+2. "흔적 남아도 복원 로그를 먼저 볼게요." 로그를 연다.
+3. "등급이 왜 틀렸는지부터 보죠." 열람 등급 사유를 조회한다.
+4. 말없이 화면을 캡처하고 접속을 끊을 준비를 한다.`,
   },
-  "L3 현장 파견 계약 분석관": {
+  "남극 거대공동 현장 파견 계약 분석관": {
     narrative: `[Scene]
-파견 전 교육실에는 창문이 없습니다.
-당신은 L3 현장 파견 계약 분석관으로, 계약서의 위험 조항과 실제 진입 경로가 맞는지 확인하는 역할을 맡았습니다.
+극지 현장 파견 대기실에는 창문이 없습니다.
+당신은 남극 거대공동 조사 현장으로 배정된 계약 분석관입니다. 공개 임무는 계약서의 위험 조항과 실제 진입 좌표가 맞는지 확인하는 일입니다.
+
+내부 코드명과 원인 항목은 검은 칸으로 가려져 있습니다.
 
 현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
 
 "네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
 문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
 
-벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
+벽면 스크린에는 남극 조사 지점의 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
 강사는 아무렇지 않게 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
@@ -1408,27 +1632,34 @@ Boundary Stability: 안정
 
 "세 번째 표지판을 보면 돌아오지 마라."
 
+강사가 당신 쪽으로 고개를 돌립니다.
+
+"어때요. 방금 말한 원칙, 무슨 뜻인지 이해했습니까?
+모르겠으면 지금 물어보는 게 낫습니다. 현장에서는 질문할 시간이 없을 수도 있으니까."
+
 [State]
 Disclosure Level: RESTRICTED
 Boundary Stability: 흔들림
-Visible Classification: 관찰`,
+Visible Classification: 남극 거대공동 조사 / 확인 전`,
     choices: [
-      { text: "임태오에게 경로 변경 로그를 보내달라고 한다." },
-      { text: "강사에게 17쪽의 문장을 묻는다." },
-      { text: "L3 진입 경로의 이전 버전을 조회한다." },
-      { text: "지도 단말기의 현재 좌표를 사진으로 남긴다." },
+      { text: "\"무슨 뜻인지 정확히 듣고 싶습니다.\" 강사에게 되묻는다." },
+      { text: "\"경로부터 확인하겠습니다.\" 임태오에게 변경 로그를 요청한다." },
+      { text: "\"이전 좌표가 남아 있나요?\" 진입 경로의 이전 버전을 조회한다." },
+      { text: "말없이 현재 좌표를 사진으로 남기고 두 사람의 반응을 살핀다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
-파견 전 교육실에는 창문이 없습니다.
-당신은 L3 현장 파견 계약 분석관으로, 계약서의 위험 조항과 실제 진입 경로가 맞는지 확인하는 역할을 맡았습니다.
+극지 현장 파견 대기실에는 창문이 없습니다.
+당신은 남극 거대공동 조사 현장으로 배정된 계약 분석관입니다. 공개 임무는 계약서의 위험 조항과 실제 진입 좌표가 맞는지 확인하는 일입니다.
+
+내부 코드명과 원인 항목은 검은 칸으로 가려져 있습니다.
 
 현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
 
 "네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
 문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
 
-벽면 스크린에는 L3 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
+벽면 스크린에는 남극 조사 지점의 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
 강사는 아무렇지 않게 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
@@ -1437,16 +1668,21 @@ Visible Classification: 관찰`,
 
 "세 번째 표지판을 보면 돌아오지 마라."
 
+강사가 당신 쪽으로 고개를 돌립니다.
+
+"어때요. 방금 말한 원칙, 무슨 뜻인지 이해했습니까?
+모르겠으면 지금 물어보는 게 낫습니다. 현장에서는 질문할 시간이 없을 수도 있으니까."
+
 [State]
 Disclosure Level: RESTRICTED
 Boundary Stability: 흔들림
-Visible Classification: 관찰
+Visible Classification: 남극 거대공동 조사 / 확인 전
 
 [Choices]
-1. 임태오에게 경로 변경 로그를 보내달라고 한다.
-2. 강사에게 17쪽의 문장을 묻는다.
-3. L3 진입 경로의 이전 버전을 조회한다.
-4. 지도 단말기의 현재 좌표를 사진으로 남긴다.`,
+1. "무슨 뜻인지 정확히 듣고 싶습니다." 강사에게 되묻는다.
+2. "경로부터 확인하겠습니다." 임태오에게 변경 로그를 요청한다.
+3. "이전 좌표가 남아 있나요?" 진입 경로의 이전 버전을 조회한다.
+4. 말없이 현재 좌표를 사진으로 남기고 두 사람의 반응을 살핀다.`,
   },
   "소바리 주변부 실종 조사팀 현지 협력자": {
     narrative: `[Scene]
@@ -1465,14 +1701,19 @@ Visible Classification: 관찰
 
 무전 기록의 시간은 내일 오후로 찍혀 있습니다.
 
+나로 노인이 무전기 볼륨을 줄이며 묻습니다.
+
+"그래도 산으로 갈 건가.
+아니면 먼저, 저 목소리가 어디서 다시 살아났는지 볼 건가."
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정`,
     choices: [
-      { text: "나로 노인에게 산 능선의 빛에 대해 묻는다." },
-      { text: "마지막 무전 좌표를 지도에 표시한다." },
-      { text: "조사팀 출발 기록을 확인한다." },
-      { text: "무전 원본 파일을 복사한다." },
+      { text: "\"저 빛을 본 사람이 또 있습니까?\" 나로 노인에게 묻는다." },
+      { text: "\"좌표부터 찍어두겠습니다.\" 마지막 무전 위치를 지도에 표시한다." },
+      { text: "\"그 사람들이 정말 출발했는지부터 보죠.\" 출발 기록을 확인한다." },
+      { text: "말없이 무전 원본을 복사하고, 재생 시간을 다시 본다." },
     ],
     allow_freeform: true,
     raw: `[Scene]
@@ -1491,15 +1732,20 @@ Boundary Stability: 안정`,
 
 무전 기록의 시간은 내일 오후로 찍혀 있습니다.
 
+나로 노인이 무전기 볼륨을 줄이며 묻습니다.
+
+"그래도 산으로 갈 건가.
+아니면 먼저, 저 목소리가 어디서 다시 살아났는지 볼 건가."
+
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
 
 [Choices]
-1. 나로 노인에게 산 능선의 빛에 대해 묻는다.
-2. 마지막 무전 좌표를 지도에 표시한다.
-3. 조사팀 출발 기록을 확인한다.
-4. 무전 원본 파일을 복사한다.`,
+1. "저 빛을 본 사람이 또 있습니까?" 나로 노인에게 묻는다.
+2. "좌표부터 찍어두겠습니다." 마지막 무전 위치를 지도에 표시한다.
+3. "그 사람들이 정말 출발했는지부터 보죠." 출발 기록을 확인한다.
+4. 말없이 무전 원본을 복사하고, 재생 시간을 다시 본다.`,
   },
 };
 
@@ -1565,9 +1811,9 @@ export async function POST(req: Request) {
       return NextResponse.json({
         narrative: reason,
         choices: [
-          { text: language === "en" ? "Try a different action" : "다른 행동을 시도한다" },
-          { text: language === "en" ? "Look around" : "주변을 살핀다" },
-          { text: language === "en" ? "Review the current situation" : "현재 상황을 정리한다" },
+          { text: language === "en" ? "\"Then I'll try another way.\" Change the approach." : "\"그럼 다른 방식으로 해볼게요.\" 접근 방식을 바꾼다." },
+          { text: language === "en" ? "\"Hold on. I need to read the room first.\" Look around." : "\"잠깐만요. 주변부터 다시 볼게요.\" 지금 보이는 단서를 살핀다." },
+          { text: language === "en" ? "\"Give me one second to line this up.\" Review the current situation." : "\"한 번만 정리하고 움직일게요.\" 현재 상황을 다시 맞춰본다." },
         ],
         allow_freeform: true,
         raw: reason,
@@ -1577,11 +1823,11 @@ export async function POST(req: Request) {
 
   if (!continueFrom && language === "ko" && selectedRoute && messages.length <= 3) {
     const opening = STARTER_ROUTE_OPENINGS[selectedRoute];
-    if (opening) return NextResponse.json(withBriefing(opening, messages));
+    if (opening) return NextResponse.json(withSessionPrelude(withBriefing(opening, messages, language), language, selectedRoute));
   }
 
   if (!continueFrom && language === "ko" && !selectedRoute && messages.length === 1 && lastUser) {
-    return NextResponse.json(buildCustomCharacterOpening(lastUser.content));
+    return NextResponse.json(withSessionPrelude(buildCustomCharacterOpening(lastUser.content), language, lastUser.content));
   }
 
   try {
@@ -1652,6 +1898,10 @@ ${OPENING_FLOW_RULE}
 
 ---
 
+${CONVERSATIONAL_PLAY_RULE}
+
+---
+
 ${routePlaybook}
 
 ---
@@ -1664,6 +1914,10 @@ ${sessionAnchor}`
 ---
 
 ${OPENING_FLOW_RULE}
+
+---
+
+${CONVERSATIONAL_PLAY_RULE}
 
 ---
 

@@ -8,7 +8,7 @@ type Turn =
   | { role: "user"; content: string; apiContent?: string; hidden?: boolean }
   | { role: "assistant"; response: GameResponse };
 
-type SessionInfoTab = "memory" | "length" | "difficulty" | "model" | "events" | null;
+type SessionInfoTab = "menu" | "save" | "memory" | "length" | "difficulty" | "model" | "events" | null;
 type EntryStage = "intro" | "boot" | "ready";
 type DifficultyMode = "story" | "traveler" | "observed";
 type ModelProfile = "default" | "fast" | "deep";
@@ -38,6 +38,19 @@ type SceneImageMatch = {
 type SceneImageRule = SceneImageMatch & {
   pattern: RegExp;
 };
+type SessionSave = {
+  version: 1;
+  title: string;
+  updatedAt: string;
+  turns: Turn[];
+  memo: string;
+  memoryItems: SummaryMemoryItem[];
+  eventLogItems: EventLogItem[];
+  difficultyMode: DifficultyMode;
+  modelProfile: ModelProfile;
+  outputTokens: number;
+  language: Language;
+};
 
 const TOKEN_MIN = 800;
 const TOKEN_MAX = 4000;
@@ -51,6 +64,7 @@ const DIFFICULTY_STORAGE_KEY = "tiu-difficulty-mode";
 const MODEL_PROFILE_STORAGE_KEY = "tiu-model-profile";
 const EVENT_LOG_STORAGE_KEY = "tiu-event-log";
 const LANGUAGE_STORAGE_KEY = "tiu-ui-language";
+const SESSION_SAVE_STORAGE_KEY = "tiu-current-session-save";
 const ACCESS_ENDPOINT = "/api/access";
 const SESSION_STATE_ENDPOINT = "/api/session-state";
 const BOOT_DURATION_MS = 2600;
@@ -107,6 +121,14 @@ const UI_TEXT = {
     accessDefaultError: "접속 확인에 실패했습니다.",
     worldSession: "WORLD SESSION",
     tabs: {
+      menu: "메뉴",
+      menuSummary: "세션 설정",
+      save: "세이브 / 로드",
+      saveEmpty: "저장된 진행 없음",
+      saveReady: "이어하기 가능",
+      playMode: "진행 모드",
+      model: "모델",
+      close: "닫기",
       memory: "요약 메모리",
       memoryEmpty: "장기 기억 비어 있음",
       memoryCount: (count: number) => `${count}개 저장됨`,
@@ -134,6 +156,18 @@ const UI_TEXT = {
       empty: "아직 기록된 사건이 없습니다. 장면이 진행되면 자동으로 쌓입니다.",
       fallbackDetail: "세부 정보 미확인",
       delete: "삭제",
+    },
+    save: {
+      title: "현재 세션",
+      description: "대화 로그, 브리핑, 선택한 설정을 자동 저장합니다. 다음 접속 때 바로 이어할 수 있습니다.",
+      auto: "자동 저장 활성화",
+      noSave: "아직 이어할 수 있는 세션이 없습니다. 시작 루트나 캐릭터로 첫 장면을 열면 자동 저장됩니다.",
+      updated: "저장 시각",
+      turns: (count: number) => `${count}개 턴`,
+      load: "불러오기",
+      saveNow: "지금 저장",
+      newSession: "새 세션 시작",
+      newSessionHint: "요약 메모리와 플레이어 메모는 유지하고, 현재 대화 진행만 비웁니다.",
     },
     briefing: {
       title: "상황 브리핑",
@@ -208,6 +242,14 @@ const UI_TEXT = {
     accessDefaultError: "Access check failed.",
     worldSession: "WORLD SESSION",
     tabs: {
+      menu: "Menu",
+      menuSummary: "Session controls",
+      save: "Save / Load",
+      saveEmpty: "No saved run",
+      saveReady: "Continue ready",
+      playMode: "Play Mode",
+      model: "Model",
+      close: "Close",
       memory: "Summary Memory",
       memoryEmpty: "No long-term memory",
       memoryCount: (count: number) => `${count} saved`,
@@ -235,6 +277,18 @@ const UI_TEXT = {
       empty: "No events have been logged yet. Scenes will add records automatically.",
       fallbackDetail: "No details confirmed",
       delete: "Delete",
+    },
+    save: {
+      title: "Current Session",
+      description: "Auto-saves the dialogue log, briefing, and selected settings so you can continue next time.",
+      auto: "Auto-save active",
+      noSave: "No playable session is saved yet. Open a first scene from a route or character to start auto-saving.",
+      updated: "Saved",
+      turns: (count: number) => `${count} turns`,
+      load: "Load",
+      saveNow: "Save now",
+      newSession: "New session",
+      newSessionHint: "Keeps summary memory and player memo, but clears the current dialogue run.",
     },
     briefing: {
       title: "Situation Briefing",
@@ -324,30 +378,30 @@ const STARTER_ROUTES = [
     signal: "ORACLE NODE-04",
   },
   {
-    title: "L3 현장 파견",
+    title: "남극 거대공동 현장 파견",
     role: "계약 분석관",
-    tone: "현장 / 지도 오류 / 격리",
-    guide: "현장 파견 중 지도와 현실이 어긋나는 지점을 따라가며 생존과 판단을 병행합니다.",
-    objective: "첫 목표: L3 진입 경로에서 무엇이 실제로 바뀌었는지 확인하기.",
+    tone: "극지 현장 / 지도 오류 / 격리",
+    guide: "남극 거대공동 조사 지점으로 파견되어, 지도와 현실이 어긋나는 좌표를 확인하는 현장 중심 플레이입니다.",
+    objective: "첫 목표: 파견 명령서의 진입 좌표와 실제 현장 좌표가 왜 다른지 확인하기.",
     prompt: "START_ROUTE:L3_FIELD_ANALYST",
     accent: "bg-violet-400",
     cardClass: "border-violet-500/35 bg-violet-950/10 hover:border-violet-400/70 hover:bg-violet-950/25",
     titleClass: "text-violet-100",
     image: `${ASSET_BASE}/antarctic-gate.webp`,
-    signal: "L3 FIELD ANOMALY",
+    signal: "ANTARCTIC FIELD ANOMALY",
   },
 ] as const;
 
 const CHARACTER_EXAMPLES = [
   "이름: 정아랑 / 나이: 29 / 직업(소속): 마이더스손 괴담 조사 기자 / 소지품: 녹음기, 취재수첩, 방수 손전등 / 소지금: 86,000원",
   "이름: 강지훈 / 나이: 34 / 직업(소속): 폐기 문서 검수 계약직 / 소지품: 임시 출입증, 보조 배터리, 낡은 USB / 소지금: 42,000원",
-  "이름: 한유진 / 나이: 31 / 직업(소속): L3 현장 지원팀 분석관 / 소지품: 지도 단말기, 필름 카메라, 응급 파우치 / 소지금: 120,000원",
+  "이름: 한유진 / 나이: 31 / 직업(소속): 극지 현장 지원팀 분석관 / 소지품: 지도 단말기, 필름 카메라, 응급 파우치 / 소지금: 120,000원",
 ] as const;
 
 const CHARACTER_EXAMPLES_EN = [
   "Name: Arang Jung / Age: 29 / Occupation: Midas-Hand urban legend reporter / Items: recorder, field notebook, waterproof flashlight / Funds: 86,000 KRW",
   "Name: Jihoon Kang / Age: 34 / Occupation: Contract archive disposal reviewer / Items: temporary pass, power bank, old USB drive / Funds: 42,000 KRW",
-  "Name: Yujin Han / Age: 31 / Occupation: L3 field support analyst / Items: map terminal, film camera, emergency pouch / Funds: 120,000 KRW",
+  "Name: Yujin Han / Age: 31 / Occupation: polar field support analyst / Items: map terminal, film camera, emergency pouch / Funds: 120,000 KRW",
 ] as const;
 
 const STARTER_ROUTE_EN: Record<string, {
@@ -372,11 +426,11 @@ const STARTER_ROUTE_EN: Record<string, {
     objective: "First objective: find why KR-INIT-001 reappeared and trace the original source.",
   },
   "START_ROUTE:L3_FIELD_ANALYST": {
-    title: "L3 Field Dispatch",
+    title: "Antarctic Hollow Dispatch",
     role: "Contract Analyst",
-    tone: "Field work / map errors / quarantine",
-    guide: "Track the point where map and reality diverge while balancing survival and judgment.",
-    objective: "First objective: identify what truly changed on the L3 entry route.",
+    tone: "Polar fieldwork / map errors / quarantine",
+    guide: "Deploy to an Antarctic hollow survey point and verify where the map begins to disagree with the site.",
+    objective: "First objective: compare the dispatch coordinates against the actual field coordinates.",
   },
 };
 
@@ -512,7 +566,7 @@ const SCENE_IMAGE_RULES: SceneImageRule[] = [
     pattern: /남극|antarctic|게이트|빙하|크레바스|L3|현장 파견/i,
     src: `${ASSET_BASE}/antarctic-gate.webp`,
     title: "ANTARCTIC GATE",
-    detail: "L3 현장 이상 좌표",
+    detail: "남극 거대공동 조사 좌표",
   },
   {
     pattern: /한국 방벽|방벽|coastal defense|생활구|봉쇄/i,
@@ -751,6 +805,117 @@ function parseSavedEventLogItems(saved: string | null): EventLogItem[] {
   } catch {
     return [];
   }
+}
+
+function normalizeGameResponse(value: unknown): GameResponse | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  const narrative = typeof record.narrative === "string" ? record.narrative : "";
+  const raw = typeof record.raw === "string" ? record.raw : narrative;
+  if (!narrative && !raw) return null;
+
+  const choices = Array.isArray(record.choices)
+    ? record.choices
+        .map((choice) => {
+          if (!choice || typeof choice !== "object") return null;
+          const text = String((choice as Record<string, unknown>).text ?? "").trim();
+          return text ? { text } : null;
+        })
+        .filter((choice): choice is { text: string } => choice !== null)
+        .slice(0, 6)
+    : [];
+
+  const response: GameResponse = {
+    narrative: narrative || raw,
+    raw,
+    choices,
+    allow_freeform: record.allow_freeform !== false,
+  };
+
+  if (record.briefing && typeof record.briefing === "object") {
+    response.briefing = record.briefing as GameResponse["briefing"];
+  }
+  if (Array.isArray(record.memory_updates)) {
+    response.memory_updates = record.memory_updates
+      .map((item) => String(item).trim().slice(0, SUMMARY_MEMORY_LIMIT))
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+  if (typeof record.truncated === "boolean") response.truncated = record.truncated;
+  if (typeof record.continuation === "boolean") response.continuation = record.continuation;
+  if (typeof record.continuation_of === "string") response.continuation_of = record.continuation_of;
+
+  return response;
+}
+
+function normalizeTurn(value: unknown): Turn | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  if (record.role === "user") {
+    const content = typeof record.content === "string" ? record.content : "";
+    if (!content) return null;
+    return {
+      role: "user",
+      content,
+      apiContent: typeof record.apiContent === "string" ? record.apiContent : undefined,
+      hidden: record.hidden === true,
+    };
+  }
+
+  if (record.role === "assistant") {
+    const response = normalizeGameResponse(record.response);
+    return response ? { role: "assistant", response } : null;
+  }
+
+  return null;
+}
+
+function parseSessionSave(saved: string | null): SessionSave | null {
+  if (!saved) return null;
+
+  try {
+    const parsed = JSON.parse(saved) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const turns = Array.isArray(parsed.turns)
+      ? parsed.turns.map(normalizeTurn).filter((turn): turn is Turn => turn !== null)
+      : [];
+    if (turns.length === 0) return null;
+
+    return {
+      version: 1,
+      title: typeof parsed.title === "string" ? parsed.title.slice(0, 80) : "WORLD SESSION",
+      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
+      turns,
+      memo: typeof parsed.memo === "string" ? parsed.memo.slice(0, PLAYER_MEMO_LIMIT) : "",
+      memoryItems: Array.isArray(parsed.memoryItems)
+        ? parseSavedMemoryItems(JSON.stringify(parsed.memoryItems), null)
+        : [],
+      eventLogItems: Array.isArray(parsed.eventLogItems)
+        ? parseSavedEventLogItems(JSON.stringify(parsed.eventLogItems))
+        : [],
+      difficultyMode: normalizeDifficulty(typeof parsed.difficultyMode === "string" ? parsed.difficultyMode : null),
+      modelProfile: normalizeModelProfile(typeof parsed.modelProfile === "string" ? parsed.modelProfile : null),
+      outputTokens: normalizeTokenValue(Number(parsed.outputTokens) || DEFAULT_OUTPUT_TOKENS),
+      language: normalizeLanguage(typeof parsed.language === "string" ? parsed.language : null),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatSavedAt(value: string, language: Language): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString(language === "en" ? "en-US" : "ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function firstNarrativeLine(text: string): string {
@@ -1490,6 +1655,7 @@ export default function Home() {
   const [modelProfile, setModelProfile] = useState<ModelProfile>("default");
   const [language, setLanguage] = useState<Language>("ko");
   const [eventLogItems, setEventLogItems] = useState<EventLogItem[]>([]);
+  const [sessionSave, setSessionSave] = useState<SessionSave | null>(null);
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [serverSyncReady, setServerSyncReady] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
@@ -1503,19 +1669,99 @@ export default function Home() {
   const [bootStep, setBootStep] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  function applySessionSave(save: SessionSave, markReady = false) {
+    setTurns(save.turns);
+    setInput("");
+    setShowSuggestions(false);
+    setShowPlayerMemo(false);
+    setMemo(save.memo.slice(0, PLAYER_MEMO_LIMIT));
+    setMemoryItems(save.memoryItems);
+    setEventLogItems(save.eventLogItems);
+    setDifficultyMode(save.difficultyMode);
+    setModelProfile(save.modelProfile);
+    setOutputTokens(normalizeTokenValue(save.outputTokens));
+    setLanguage(save.language);
+    setSessionSave(save);
+    if (markReady) {
+      setEntryStage("ready");
+      setBootProgress(100);
+      setBootStep(BOOT_STEPS[save.language].length - 1);
+    }
+    window.setTimeout(() => scrollToBottom("auto"), 0);
+  }
+
+  function buildCurrentSessionSave(): SessionSave | null {
+    if (turns.length === 0) return null;
+
+    const lastAssistantTurn = [...turns]
+      .reverse()
+      .find((turn): turn is Extract<Turn, { role: "assistant" }> => turn.role === "assistant");
+    const firstUserTurn = turns.find((turn): turn is Extract<Turn, { role: "user" }> => turn.role === "user" && !turn.hidden);
+    const briefingTitle = lastAssistantTurn?.response.briefing?.logs
+      ?.find((log) => log.startsWith("현재 장면:") || log.startsWith("Current scene:"))
+      ?.replace(/^현재 장면:\s*/, "")
+      .replace(/^Current scene:\s*/, "")
+      .trim();
+    const title =
+      briefingTitle ||
+      (lastAssistantTurn ? firstNarrativeLine(lastAssistantTurn.response.narrative) : "") ||
+      firstUserTurn?.content.slice(0, 80) ||
+      SESSION_TITLE;
+
+    return {
+      version: 1,
+      title,
+      updatedAt: new Date().toISOString(),
+      turns,
+      memo,
+      memoryItems,
+      eventLogItems,
+      difficultyMode,
+      modelProfile,
+      outputTokens: normalizeTokenValue(outputTokens),
+      language,
+    };
+  }
+
+  function saveCurrentSession() {
+    const save = buildCurrentSessionSave();
+    if (!save) return;
+
+    setSessionSave(save);
+    window.localStorage.setItem(SESSION_SAVE_STORAGE_KEY, JSON.stringify(save));
+  }
+
+  function clearCurrentSession() {
+    setTurns([]);
+    setInput("");
+    setShowSuggestions(false);
+    setShowPlayerMemo(false);
+    setEventLogItems([]);
+    setSessionSave(null);
+    window.localStorage.removeItem(SESSION_SAVE_STORAGE_KEY);
+    setEntryStage("ready");
+    setBootProgress(100);
+    setBootStep(BOOT_STEPS[language].length - 1);
+  }
+
   async function hydrateSessionState() {
     await fetch(SESSION_STATE_ENDPOINT)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { memo?: string; memoryItems?: SummaryMemoryItem[]; eventLogItems?: EventLogItem[] } | null) => {
+      .then((data: { memo?: string; memoryItems?: SummaryMemoryItem[]; eventLogItems?: EventLogItem[]; sessionSave?: SessionSave } | null) => {
         if (!data) return;
-        if (typeof data.memo === "string" && data.memo) {
+        const hasLocalSessionSave = Boolean(window.localStorage.getItem(SESSION_SAVE_STORAGE_KEY));
+        if (!hasLocalSessionSave && typeof data.memo === "string" && data.memo) {
           setMemo(data.memo.slice(0, PLAYER_MEMO_LIMIT));
         }
-        if (Array.isArray(data.memoryItems) && data.memoryItems.length > 0) {
+        if (!hasLocalSessionSave && Array.isArray(data.memoryItems) && data.memoryItems.length > 0) {
           setMemoryItems(parseSavedMemoryItems(JSON.stringify(data.memoryItems), null));
         }
-        if (Array.isArray(data.eventLogItems) && data.eventLogItems.length > 0) {
+        if (!hasLocalSessionSave && Array.isArray(data.eventLogItems) && data.eventLogItems.length > 0) {
           setEventLogItems(parseSavedEventLogItems(JSON.stringify(data.eventLogItems)));
+        }
+        if (!hasLocalSessionSave && data.sessionSave) {
+          const normalizedSave = parseSessionSave(JSON.stringify(data.sessionSave));
+          if (normalizedSave) applySessionSave(normalizedSave, true);
         }
       })
       .catch(() => undefined)
@@ -1531,16 +1777,21 @@ export default function Home() {
     const savedModelProfile = window.localStorage.getItem(MODEL_PROFILE_STORAGE_KEY);
     const savedEventLog = window.localStorage.getItem(EVENT_LOG_STORAGE_KEY);
     const savedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const savedSession = parseSessionSave(window.localStorage.getItem(SESSION_SAVE_STORAGE_KEY));
 
-    if (savedMemo) setMemo(savedMemo.slice(0, PLAYER_MEMO_LIMIT));
-    setMemoryItems(parseSavedMemoryItems(savedMemoryStack, legacyMemory));
-    setEventLogItems(parseSavedEventLogItems(savedEventLog));
-    if (Number.isFinite(savedTokens) && savedTokens > 0) {
-      setOutputTokens(normalizeTokenValue(savedTokens));
+    if (savedSession) {
+      applySessionSave(savedSession, true);
+    } else {
+      if (savedMemo) setMemo(savedMemo.slice(0, PLAYER_MEMO_LIMIT));
+      setMemoryItems(parseSavedMemoryItems(savedMemoryStack, legacyMemory));
+      setEventLogItems(parseSavedEventLogItems(savedEventLog));
+      if (Number.isFinite(savedTokens) && savedTokens > 0) {
+        setOutputTokens(normalizeTokenValue(savedTokens));
+      }
+      setDifficultyMode(normalizeDifficulty(savedDifficulty));
+      setModelProfile(normalizeModelProfile(savedModelProfile));
+      setLanguage(normalizeLanguage(savedLanguage));
     }
-    setDifficultyMode(normalizeDifficulty(savedDifficulty));
-    setModelProfile(normalizeModelProfile(savedModelProfile));
-    setLanguage(normalizeLanguage(savedLanguage));
     setStorageLoaded(true);
 
     fetch(ACCESS_ENDPOINT)
@@ -1562,6 +1813,8 @@ export default function Home() {
         return hydrateSessionState();
       })
       .finally(() => setAccessChecked(true));
+    // Initial storage/access hydration should run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1579,6 +1832,27 @@ export default function Home() {
   }, [memoryItems, storageLoaded]);
 
   useEffect(() => {
+    if (!storageLoaded) return;
+    const save = buildCurrentSessionSave();
+    if (!save) return;
+
+    window.localStorage.setItem(SESSION_SAVE_STORAGE_KEY, JSON.stringify(save));
+    setSessionSave(save);
+    // buildCurrentSessionSave is derived from the explicit state dependencies below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    difficultyMode,
+    eventLogItems,
+    language,
+    memo,
+    memoryItems,
+    modelProfile,
+    outputTokens,
+    storageLoaded,
+    turns,
+  ]);
+
+  useEffect(() => {
     if (!storageLoaded || !serverSyncReady || !accessGranted) return;
 
     const controller = new AbortController();
@@ -1586,7 +1860,7 @@ export default function Home() {
       fetch(SESSION_STATE_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memo, memoryItems, eventLogItems }),
+        body: JSON.stringify({ memo, memoryItems, eventLogItems, sessionSave }),
         signal: controller.signal,
       }).catch(() => undefined);
     }, 400);
@@ -1595,7 +1869,7 @@ export default function Home() {
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [accessGranted, eventLogItems, memo, memoryItems, serverSyncReady, storageLoaded]);
+  }, [accessGranted, eventLogItems, memo, memoryItems, serverSyncReady, sessionSave, storageLoaded]);
 
   useEffect(() => {
     if (!storageLoaded) return;
@@ -1662,6 +1936,56 @@ export default function Home() {
   const summaryMemoryText = memoryItems
     .map((item, index) => `${index + 1}. ${item.text}`)
     .join("\n");
+  const sessionMenuItems: Array<{
+    id: Exclude<SessionInfoTab, "menu" | null>;
+    title: string;
+    value: string;
+    detail: string;
+    className: string;
+  }> = [
+    {
+      id: "save",
+      title: text.tabs.save,
+      value: sessionSave ? text.tabs.saveReady : text.tabs.saveEmpty,
+      detail: sessionSave ? `${text.save.updated}: ${formatSavedAt(sessionSave.updatedAt, language)}` : text.save.description,
+      className: "hover:border-blue-500/50",
+    },
+    {
+      id: "difficulty",
+      title: text.tabs.playMode,
+      value: currentDifficultyOption.title,
+      detail: currentDifficultyOption.summary,
+      className: "hover:border-emerald-500/50",
+    },
+    {
+      id: "memory",
+      title: text.tabs.memory,
+      value: memoryItems.length > 0 ? text.tabs.memoryCount(memoryItems.length) : text.tabs.memoryEmpty,
+      detail: language === "en" ? "Long-term facts referenced by the AI" : "AI가 실제 진행에 참조하는 장기 기억",
+      className: "hover:border-violet-500/50",
+    },
+    {
+      id: "model",
+      title: text.tabs.model,
+      value: currentModelOption.title,
+      detail: currentModelOption.summary,
+      className: "hover:border-cyan-500/50",
+    },
+    {
+      id: "length",
+      title: text.tabs.length,
+      value: `${responseLengthLabel(outputTokens, language)} / ${responseMultiplier(outputTokens)}`,
+      detail: language === "en" ? "Adjust maximum response length" : "AI 답변 최대 분량 조절",
+      className: "hover:border-red-500/50",
+    },
+    {
+      id: "events",
+      title: text.tabs.events,
+      value: eventLogItems.length > 0 ? text.tabs.eventsCount(eventLogItems.length) : text.tabs.eventsEmpty,
+      detail: language === "en" ? "Automatically tracked scene records" : "진행 중 자동 누적되는 사건 기록",
+      className: "hover:border-amber-500/50",
+    },
+  ];
 
   function buildErrorResponse(err: unknown): GameResponse {
     const message = err instanceof Error
@@ -1989,82 +2313,135 @@ export default function Home() {
 
       <section className="border-b border-zinc-800 bg-zinc-950/95 px-4 py-2">
         <div className="mx-auto max-w-2xl">
-          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => toggleSessionInfo("difficulty")}
-              className={`min-w-[8.5rem] flex-1 rounded-md border px-3 py-2 text-left transition-colors ${
-                sessionInfoTab === "difficulty"
-                  ? "border-emerald-400/60 bg-emerald-950/25"
-                  : "border-zinc-800 bg-zinc-900/60 hover:border-emerald-500/40"
+              onClick={() => toggleSessionInfo("menu")}
+              className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                sessionInfoTab
+                  ? "border-emerald-400/60 bg-emerald-950/20"
+                  : "border-zinc-800 bg-zinc-900/70 hover:border-emerald-500/50"
               }`}
             >
-              <span className="block truncate text-xs font-medium text-zinc-100">
+              <span className="block text-xs font-semibold text-zinc-100">{text.tabs.menu}</span>
+              <span className="mt-0.5 block text-[10px] text-zinc-500">{text.tabs.menuSummary}</span>
+            </button>
+            <div className="no-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
+              <span className="shrink-0 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300">
                 {currentDifficultyOption.title}
               </span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                {currentDifficultyOption.summary}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleSessionInfo("memory")}
-              className={`min-w-[8.5rem] flex-1 rounded-md border px-3 py-2 text-left transition-colors ${
-                sessionInfoTab === "memory"
-                  ? "border-violet-400/60 bg-violet-950/25"
-                  : "border-zinc-800 bg-zinc-900/60 hover:border-violet-500/40"
-              }`}
-            >
-              <span className="block text-xs font-medium text-zinc-100">{text.tabs.memory}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                {memoryItems.length > 0 ? text.tabs.memoryCount(memoryItems.length) : text.tabs.memoryEmpty}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleSessionInfo("model")}
-              className={`min-w-[8.5rem] flex-1 rounded-md border px-3 py-2 text-left transition-colors ${
-                sessionInfoTab === "model"
-                  ? "border-cyan-400/60 bg-cyan-950/25"
-                  : "border-zinc-800 bg-zinc-900/60 hover:border-cyan-500/40"
-              }`}
-            >
-              <span className="block truncate text-xs font-medium text-zinc-100">
+              <span className="shrink-0 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-400">
                 {currentModelOption.title}
               </span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                {currentModelOption.summary}
+              <span className="shrink-0 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-400">
+                {responseMultiplier(outputTokens)}
               </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleSessionInfo("events")}
-              className={`min-w-[8.5rem] flex-1 rounded-md border px-3 py-2 text-left transition-colors ${
-                sessionInfoTab === "events"
-                  ? "border-amber-400/60 bg-amber-950/20"
-                  : "border-zinc-800 bg-zinc-900/60 hover:border-amber-500/40"
-              }`}
-            >
-              <span className="block text-xs font-medium text-zinc-100">{text.tabs.events}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                {eventLogItems.length > 0 ? text.tabs.eventsCount(eventLogItems.length) : text.tabs.eventsEmpty}
+              <span className="shrink-0 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-500">
+                {memoryItems.length > 0 ? text.tabs.memoryCount(memoryItems.length) : text.tabs.memoryEmpty}
               </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleSessionInfo("length")}
-              className={`min-w-[8.5rem] flex-1 rounded-md border px-3 py-2 text-left transition-colors ${
-                sessionInfoTab === "length"
-                  ? "border-red-400/60 bg-red-950/20"
-                  : "border-zinc-800 bg-zinc-900/60 hover:border-red-500/40"
-              }`}
-            >
-              <span className="block text-xs font-medium text-zinc-100">{text.tabs.length}</span>
-              <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                {responseLengthLabel(outputTokens, language)} / {responseMultiplier(outputTokens)}
+              <span className="shrink-0 rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-500">
+                {sessionSave ? text.tabs.saveReady : text.tabs.saveEmpty}
               </span>
-            </button>
+            </div>
           </div>
+
+          {sessionInfoTab === "menu" && (
+            <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900/80 p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-200">{text.tabs.menuSummary}</span>
+                <button
+                  type="button"
+                  onClick={() => setSessionInfoTab(null)}
+                  className="rounded border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-200"
+                >
+                  {text.tabs.close}
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {sessionMenuItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSessionInfoTab(item.id)}
+                    className={`flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-left transition-colors ${item.className}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium text-zinc-100">{item.title}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-zinc-500">{item.detail}</span>
+                    </span>
+                    <span className="max-w-[45%] truncate text-right text-[11px] font-medium text-zinc-300">
+                      {item.value}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sessionInfoTab === "save" && (
+            <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900/70 p-2">
+              <div className="rounded-md border border-zinc-800 bg-zinc-950 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 h-2 w-2 rounded-full bg-blue-300 shadow-[0_0_10px_rgba(147,197,253,0.8)]" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-zinc-100">{text.save.title}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-zinc-500">{text.save.description}</div>
+                  </div>
+                  <span className="shrink-0 rounded border border-blue-400/30 bg-blue-950/25 px-2 py-1 text-[11px] text-blue-100">
+                    {text.save.auto}
+                  </span>
+                </div>
+
+                {sessionSave ? (
+                  <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-900/60 p-3">
+                    <div className="truncate text-sm font-medium text-zinc-100">{sessionSave.title}</div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+                      <span>{text.save.updated}: {formatSavedAt(sessionSave.updatedAt, language)}</span>
+                      <span>{text.save.turns(sessionSave.turns.length)}</span>
+                      <span>{getDifficultyOptionText(
+                        DIFFICULTY_OPTIONS.find((option) => option.id === sessionSave.difficultyMode) ?? DIFFICULTY_OPTIONS[1],
+                        language,
+                      ).title}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-md border border-dashed border-zinc-800 px-3 py-4 text-xs leading-relaxed text-zinc-600">
+                    {text.save.noSave}
+                  </div>
+                )}
+
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => sessionSave && applySessionSave(sessionSave, true)}
+                    disabled={!sessionSave || loading}
+                    className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-blue-400/60 hover:text-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {text.save.load}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveCurrentSession}
+                    disabled={turns.length === 0 || loading}
+                    className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-emerald-400/60 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {text.save.saveNow}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearCurrentSession}
+                    disabled={loading}
+                    className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-red-400/50 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {text.save.newSession}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
+                  {text.save.newSessionHint}
+                </p>
+              </div>
+            </div>
+          )}
 
           {sessionInfoTab === "difficulty" && (
             <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-900/70 p-2">
