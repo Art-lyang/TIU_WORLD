@@ -31,6 +31,7 @@ next-dev-*.log
 
 # local playtest session data
 /world/session/
+/world/index/*.local.json
 
 # local workspace notes and temp assets
 /.claude/

@@ -1,36 +1,104 @@
 import OpenAI from "openai";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import {
   SYSTEM_PROMPT,
   TERM_MAPPING,
   DISCLOSURE_RULES,
-  STARTING_SCENARIOS,
 } from "@/lib/prompts";
 import { checkForbidden } from "@/lib/constants";
 import { parseGameResponse } from "@/lib/parseResponse";
-import type { ChatMessage, GameResponse } from "@/types/game";
+import type { ApiUsageSnapshot, ChatMessage, GameResponse } from "@/types/game";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/access";
+import { buildWorldIndexContext } from "@/lib/worldIndex";
+import {
+  buildGameEngineInstructions,
+  buildGameEngineState,
+  buildGameEngineStateFromMessages,
+  engineStateToBriefingLogs,
+} from "@/lib/gameEngine";
 
 export const runtime = "nodejs";
 
-const apiKey = process.env.OPENAI_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+const openAiApiKey = process.env.OPENAI_API_KEY;
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 const defaultModel = process.env.OPENAI_MODEL ?? "gpt-5";
 const fastModel = process.env.OPENAI_FAST_MODEL;
 const deepModel = process.env.OPENAI_DEEP_MODEL;
-const client = apiKey ? new OpenAI({ apiKey }) : null;
+const anthropicModel = process.env.ANTHROPIC_MODEL;
+const openAiClient = openAiApiKey ? new OpenAI({ apiKey: openAiApiKey }) : null;
+const ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_OUTPUT_TOKENS = 800;
 const MIN_OUTPUT_TOKENS = 800;
 const MAX_OUTPUT_TOKENS = 4000;
+const SERVER_MAX_OUTPUT_TOKENS = readPositiveInteger("TIU_MAX_OUTPUT_TOKENS", MAX_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS);
+const DAILY_CALL_LIMIT = readPositiveInteger("TIU_DAILY_CALL_LIMIT", 120, 1, 2000);
+const DAILY_TOKEN_LIMIT = readPositiveInteger("TIU_DAILY_TOKEN_LIMIT", 900000, 10000, 10000000);
+const MIN_REQUEST_INTERVAL_SECONDS = readPositiveInteger("TIU_MIN_SECONDS_BETWEEN_CALLS", 2, 0, 120);
+const MAX_CONTEXT_MESSAGES = readPositiveInteger("TIU_MAX_CONTEXT_MESSAGES", 36, 8, 120);
+const API_USAGE_DIR = path.join(process.cwd(), "world", "session", "api-usage");
+const API_USAGE_FILE = path.join(API_USAGE_DIR, "api-usage.json");
 type DifficultyMode = "story" | "traveler" | "observed";
-type ModelProfile = "default" | "fast" | "deep";
+type ModelProfile = "default" | "fast" | "deep" | "claude";
+type ModelProvider = "openai" | "anthropic";
 type ResponseLanguage = "ko" | "en";
+type PlayerAccountContext = {
+  displayName: string;
+  role?: string;
+};
+
+type SelectedModel = {
+  provider: ModelProvider;
+  model: string;
+  usageLabel: string;
+  configured: boolean;
+  missingEnv: string[];
+};
+
+type ApiUsageStore = {
+  date: string;
+  calls: number;
+  blocked: number;
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  actualInputTokens: number;
+  actualOutputTokens: number;
+  actualTotalTokens: number;
+  lastRequestAt?: string;
+  lastModel?: string;
+};
+
+type TokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
+
+type ModelInputMessage = {
+  role: ChatMessage["role"];
+  content: string;
+};
+
+let inMemoryUsageStore: ApiUsageStore | null = null;
+
+function readPositiveInteger(name: string, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGER): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function stripJsonBom(raw: string): string {
+  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+}
 
 function normalizeOutputTokens(value: unknown): number {
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numeric)) return DEFAULT_OUTPUT_TOKENS;
 
   const stepped = Math.round(numeric / 100) * 100;
-  return Math.min(MAX_OUTPUT_TOKENS, Math.max(MIN_OUTPUT_TOKENS, stepped));
+  return Math.min(SERVER_MAX_OUTPUT_TOKENS, Math.max(MIN_OUTPUT_TOKENS, stepped));
 }
 
 function normalizeDifficulty(value: unknown): DifficultyMode {
@@ -39,7 +107,7 @@ function normalizeDifficulty(value: unknown): DifficultyMode {
 }
 
 function normalizeModelProfile(value: unknown): ModelProfile {
-  if (value === "fast" || value === "deep") return value;
+  if (value === "fast" || value === "deep" || value === "claude") return value;
   return "default";
 }
 
@@ -47,15 +115,306 @@ function normalizeLanguage(value: unknown): ResponseLanguage {
   return value === "en" ? "en" : "ko";
 }
 
-function selectModel(profile: ModelProfile): string {
-  if (profile === "fast" && fastModel) return fastModel;
-  if (profile === "deep" && deepModel) return deepModel;
-  return defaultModel;
+function normalizePlayerAccountContext(value: unknown): PlayerAccountContext | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  const displayName = typeof record.displayName === "string"
+    ? record.displayName.replace(/\s+/g, " ").trim().slice(0, 24)
+    : "";
+  if (!displayName) return null;
+
+  return {
+    displayName,
+    role: typeof record.role === "string" ? record.role.slice(0, 24) : undefined,
+  };
+}
+
+function selectModel(profile: ModelProfile): SelectedModel {
+  if (profile === "claude") {
+    const missingEnv = [
+      anthropicApiKey ? "" : "ANTHROPIC_API_KEY",
+      anthropicModel ? "" : "ANTHROPIC_MODEL",
+    ].filter(Boolean);
+    const model = anthropicModel?.trim() || "claude-unconfigured";
+    return {
+      provider: "anthropic",
+      model,
+      usageLabel: `anthropic:${model}`,
+      configured: missingEnv.length === 0,
+      missingEnv,
+    };
+  }
+
+  const model =
+    profile === "fast" && fastModel
+      ? fastModel
+      : profile === "deep" && deepModel
+        ? deepModel
+        : defaultModel;
+  const missingEnv = openAiApiKey ? [] : ["OPENAI_API_KEY"];
+  return {
+    provider: "openai",
+    model,
+    usageLabel: `openai:${model}`,
+    configured: missingEnv.length === 0,
+    missingEnv,
+  };
+}
+
+function modelConfigurationMessage(selectedModel: SelectedModel, language: ResponseLanguage): string {
+  const missing = selectedModel.missingEnv.join(", ");
+  if (selectedModel.provider === "anthropic") {
+    return language === "en"
+      ? `Claude is prepared but not configured yet. Set ANTHROPIC_API_KEY and ANTHROPIC_MODEL after Anthropic billing/API access is fixed.${missing ? ` Missing: ${missing}.` : ""}`
+      : `Claude 연결은 준비되어 있지만 아직 설정되지 않았습니다. Anthropic 결제/API 권한 문제가 해결되면 ANTHROPIC_API_KEY와 ANTHROPIC_MODEL을 넣어주세요.${missing ? ` 누락: ${missing}.` : ""}`;
+  }
+
+  return language === "en"
+    ? `OpenAI is not configured. Set OPENAI_API_KEY in .env.local or Vercel Environment Variables.${missing ? ` Missing: ${missing}.` : ""}`
+    : `OpenAI 설정이 없습니다. .env.local 또는 Vercel 환경 변수에 OPENAI_API_KEY를 넣어주세요.${missing ? ` 누락: ${missing}.` : ""}`;
 }
 
 function supportsReasoningConfig(model: string): boolean {
   const normalized = model.toLowerCase();
   return normalized.startsWith("gpt-5") || /^o\d/.test(normalized) || normalized.startsWith("o-");
+}
+
+function todayKey(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function emptyUsageStore(): ApiUsageStore {
+  return {
+    date: todayKey(),
+    calls: 0,
+    blocked: 0,
+    estimatedInputTokens: 0,
+    estimatedOutputTokens: 0,
+    actualInputTokens: 0,
+    actualOutputTokens: 0,
+    actualTotalTokens: 0,
+  };
+}
+
+function normalizeUsageStore(value: unknown): ApiUsageStore {
+  const today = todayKey();
+  if (!value || typeof value !== "object") return emptyUsageStore();
+
+  const record = value as Record<string, unknown>;
+  if (record.date !== today) return emptyUsageStore();
+
+  return {
+    date: today,
+    calls: Math.max(0, Math.round(Number(record.calls) || 0)),
+    blocked: Math.max(0, Math.round(Number(record.blocked) || 0)),
+    estimatedInputTokens: Math.max(0, Math.round(Number(record.estimatedInputTokens) || 0)),
+    estimatedOutputTokens: Math.max(0, Math.round(Number(record.estimatedOutputTokens) || 0)),
+    actualInputTokens: Math.max(0, Math.round(Number(record.actualInputTokens) || 0)),
+    actualOutputTokens: Math.max(0, Math.round(Number(record.actualOutputTokens) || 0)),
+    actualTotalTokens: Math.max(0, Math.round(Number(record.actualTotalTokens) || 0)),
+    lastRequestAt: typeof record.lastRequestAt === "string" ? record.lastRequestAt : undefined,
+    lastModel: typeof record.lastModel === "string" ? record.lastModel : undefined,
+  };
+}
+
+async function readUsageStore(): Promise<ApiUsageStore> {
+  try {
+    const raw = await fs.readFile(API_USAGE_FILE, "utf-8");
+    const store = normalizeUsageStore(JSON.parse(stripJsonBom(raw)));
+    inMemoryUsageStore = store;
+    return store;
+  } catch {
+    if (inMemoryUsageStore) {
+      const store = normalizeUsageStore(inMemoryUsageStore);
+      inMemoryUsageStore = store;
+      return store;
+    }
+    return emptyUsageStore();
+  }
+}
+
+async function writeUsageStore(store: ApiUsageStore) {
+  inMemoryUsageStore = normalizeUsageStore(store);
+  try {
+    await fs.mkdir(API_USAGE_DIR, { recursive: true });
+    await fs.writeFile(API_USAGE_FILE, `${JSON.stringify(inMemoryUsageStore, null, 2)}\n`, "utf-8");
+  } catch {
+    // Serverless deployments may not allow durable writes to the project directory.
+    // Keep the per-instance memory guard active so chat still works.
+  }
+}
+
+function buildUsageSnapshot(
+  store: ApiUsageStore,
+  status: ApiUsageSnapshot["status"] = "ok",
+  message?: string,
+  nextAllowedAt?: string,
+): ApiUsageSnapshot {
+  return {
+    date: store.date,
+    calls: store.calls,
+    blocked: store.blocked,
+    dailyCallLimit: DAILY_CALL_LIMIT,
+    dailyTokenLimit: DAILY_TOKEN_LIMIT,
+    estimatedTokens: store.estimatedInputTokens + store.estimatedOutputTokens,
+    actualTokens: store.actualTotalTokens,
+    inputTokens: store.actualInputTokens || store.estimatedInputTokens,
+    outputTokens: store.actualOutputTokens || store.estimatedOutputTokens,
+    maxOutputTokens: SERVER_MAX_OUTPUT_TOKENS,
+    minSecondsBetweenCalls: MIN_REQUEST_INTERVAL_SECONDS,
+    lastRequestAt: store.lastRequestAt,
+    nextAllowedAt,
+    lastModel: store.lastModel,
+    status,
+    message,
+  };
+}
+
+function estimateTokensFromText(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 2);
+}
+
+function estimateInputTokens(instructions: string, input: ModelInputMessage[]): number {
+  const inputText = input.map((item) => `${item.role}: ${item.content}`).join("\n\n");
+  return estimateTokensFromText(instructions) + estimateTokensFromText(inputText) + 300;
+}
+
+function trimMessagesForBudget(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length <= MAX_CONTEXT_MESSAGES) return messages;
+
+  const first = messages[0];
+  const tail = messages.slice(-(MAX_CONTEXT_MESSAGES - 1));
+  if (first && !tail.includes(first)) return [first, ...tail];
+  return tail;
+}
+
+function usageLimitMessage(status: ApiUsageSnapshot["status"], language: ResponseLanguage, nextAllowedAt?: string): string {
+  if (status === "cooldown") {
+    return language === "en"
+      ? `Too many requests in a short time. Please wait a moment before sending again.${nextAllowedAt ? ` Next allowed: ${nextAllowedAt}` : ""}`
+      : `짧은 시간에 요청이 너무 몰렸습니다. 잠시 뒤 다시 보내주세요.${nextAllowedAt ? ` 다음 가능 시각: ${nextAllowedAt}` : ""}`;
+  }
+  if (status === "call_limit") {
+    return language === "en"
+      ? "Today's test call limit has been reached. Raise TIU_DAILY_CALL_LIMIT only if you intentionally want more API usage."
+      : "오늘 테스트 호출 한도에 도달했습니다. 더 많이 테스트할 때만 TIU_DAILY_CALL_LIMIT 값을 올려주세요.";
+  }
+  return language === "en"
+    ? "Today's estimated token budget has been reached. Lower response length or raise TIU_DAILY_TOKEN_LIMIT intentionally."
+    : "오늘 예상 토큰 예산에 도달했습니다. 응답 길이를 낮추거나, 의도적으로 TIU_DAILY_TOKEN_LIMIT 값을 올려주세요.";
+}
+
+async function guardApiUsage({
+  estimatedInputTokens,
+  requestedOutputTokens,
+  model,
+  language,
+}: {
+  estimatedInputTokens: number;
+  requestedOutputTokens: number;
+  model: string;
+  language: ResponseLanguage;
+}): Promise<{ allowed: true; usage: ApiUsageSnapshot } | { allowed: false; response: NextResponse }> {
+  const store = await readUsageStore();
+  const now = Date.now();
+  const lastRequestTime = store.lastRequestAt ? new Date(store.lastRequestAt).getTime() : 0;
+  const nextAllowedAtMs = lastRequestTime + MIN_REQUEST_INTERVAL_SECONDS * 1000;
+
+  let status: ApiUsageSnapshot["status"] | null = null;
+  let nextAllowedAt: string | undefined;
+  if (MIN_REQUEST_INTERVAL_SECONDS > 0 && lastRequestTime > 0 && now < nextAllowedAtMs) {
+    status = "cooldown";
+    nextAllowedAt = new Date(nextAllowedAtMs).toISOString();
+  } else if (store.calls >= DAILY_CALL_LIMIT) {
+    status = "call_limit";
+  } else if (store.estimatedInputTokens + store.estimatedOutputTokens + estimatedInputTokens + requestedOutputTokens > DAILY_TOKEN_LIMIT) {
+    status = "token_limit";
+  }
+
+  if (status) {
+    const blockedStore = {
+      ...store,
+      blocked: store.blocked + 1,
+      lastModel: model,
+    };
+    await writeUsageStore(blockedStore);
+    const message = usageLimitMessage(status, language, nextAllowedAt);
+    const usage = buildUsageSnapshot(blockedStore, status, message, nextAllowedAt);
+    return {
+      allowed: false,
+      response: NextResponse.json({ error: message, usage }, { status: 429 }),
+    };
+  }
+
+  const reservedStore = {
+    ...store,
+    lastRequestAt: new Date(now).toISOString(),
+    lastModel: model,
+  };
+  await writeUsageStore(reservedStore);
+  return { allowed: true, usage: buildUsageSnapshot(reservedStore) };
+}
+
+function extractUsage(response: unknown): TokenUsage {
+  if (!response || typeof response !== "object") return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  const usage = (response as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== "object") return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  const record = usage as Record<string, unknown>;
+  const inputTokens = Math.max(0, Math.round(Number(record.input_tokens ?? record.prompt_tokens) || 0));
+  const outputTokens = Math.max(0, Math.round(Number(record.output_tokens ?? record.completion_tokens) || 0));
+  const totalTokens = Math.max(0, Math.round(Number(record.total_tokens) || inputTokens + outputTokens));
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+function sumUsage(responses: unknown[]): TokenUsage {
+  return responses
+    .map(extractUsage)
+    .reduce<TokenUsage>(
+      (total, usage) => ({
+        inputTokens: total.inputTokens + usage.inputTokens,
+        outputTokens: total.outputTokens + usage.outputTokens,
+        totalTokens: total.totalTokens + usage.totalTokens,
+      }),
+      { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    );
+}
+
+async function recordApiUsageSuccess({
+  requestCount,
+  estimatedInputTokens,
+  requestedOutputTokens,
+  model,
+  responses,
+}: {
+  requestCount: number;
+  estimatedInputTokens: number;
+  requestedOutputTokens: number;
+  model: string;
+  responses: unknown[];
+}): Promise<ApiUsageSnapshot> {
+  const store = await readUsageStore();
+  const actual = sumUsage(responses);
+  const nextStore: ApiUsageStore = {
+    ...store,
+    calls: store.calls + requestCount,
+    estimatedInputTokens: store.estimatedInputTokens + estimatedInputTokens,
+    estimatedOutputTokens: store.estimatedOutputTokens + requestedOutputTokens,
+    actualInputTokens: store.actualInputTokens + actual.inputTokens,
+    actualOutputTokens: store.actualOutputTokens + actual.outputTokens,
+    actualTotalTokens: store.actualTotalTokens + actual.totalTokens,
+    lastModel: model,
+  };
+  await writeUsageStore(nextStore);
+  return buildUsageSnapshot(nextStore);
 }
 
 function extractOpenAIText(response: unknown): string {
@@ -97,12 +456,33 @@ function extractOpenAIText(response: unknown): string {
     .trim();
 }
 
-function getEmptyResponseMessage(response: unknown, language: ResponseLanguage): string {
+function extractAnthropicText(response: unknown): string {
+  if (!response || typeof response !== "object") return "";
+
+  const content = (response as { content?: unknown }).content;
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const record = part as { text?: unknown; type?: unknown };
+      if (record.type && record.type !== "text") return "";
+      return typeof record.text === "string" ? record.text.trim() : "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function getEmptyResponseMessage(response: unknown, language: ResponseLanguage, providerName = "OpenAI"): string {
   const details: string[] = [];
 
   if (response && typeof response === "object") {
     const status = (response as { status?: unknown }).status;
     if (typeof status === "string" && status) details.push(`status: ${status}`);
+
+    const stopReason = (response as { stop_reason?: unknown }).stop_reason;
+    if (typeof stopReason === "string" && stopReason) details.push(`stop_reason: ${stopReason}`);
 
     const incomplete = (response as { incomplete_details?: unknown }).incomplete_details;
     if (incomplete && typeof incomplete === "object") {
@@ -119,8 +499,8 @@ function getEmptyResponseMessage(response: unknown, language: ResponseLanguage):
 
   const suffix = details.length > 0 ? ` (${details.join(", ")})` : "";
   return language === "en"
-    ? `OpenAI returned no visible text${suffix}. Try a larger response length or check the model setting.`
-    : `OpenAI 응답에 표시 가능한 텍스트가 없습니다${suffix}. 응답 길이를 조금 늘리거나 모델 설정을 확인해 주세요.`;
+    ? `${providerName} returned no visible text${suffix}. Try a larger response length or check the model setting.`
+    : `${providerName} 응답에 표시 가능한 텍스트가 없습니다${suffix}. 응답 길이를 조금 늘리거나 모델 설정을 확인해 주세요.`;
 }
 
 function isOpenAIOutputTruncated(response: unknown): boolean {
@@ -144,6 +524,154 @@ function isOpenAIOutputTruncated(response: unknown): boolean {
     const reason = (record.incomplete_details as { reason?: unknown }).reason;
     return reason === "max_output_tokens";
   });
+}
+
+function isAnthropicOutputTruncated(response: unknown): boolean {
+  if (!response || typeof response !== "object") return false;
+  return (response as { stop_reason?: unknown }).stop_reason === "max_tokens";
+}
+
+function normalizeAnthropicMessages(input: ModelInputMessage[]) {
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+  for (const item of input) {
+    const content = item.content.trim();
+    if (!content) continue;
+    const role = item.role === "assistant" ? "assistant" : "user";
+    const previous = messages[messages.length - 1];
+    if (previous?.role === role) {
+      previous.content = `${previous.content}\n\n${content}`;
+    } else {
+      messages.push({ role, content });
+    }
+  }
+
+  if (messages[0]?.role === "assistant") {
+    messages.unshift({ role: "user", content: "Continue the current TIU world session from the available conversation context." });
+  }
+
+  return messages.length > 0 ? messages : [{ role: "user" as const, content: "Begin the TIU world session." }];
+}
+
+function extractProviderApiError(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const record = payload as Record<string, unknown>;
+  const error = record.error;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+    const type = (error as { type?: unknown }).type;
+    if (typeof type === "string" && type.trim()) return type.trim();
+  }
+  const message = record.message;
+  return typeof message === "string" ? message.trim() : "";
+}
+
+async function parseProviderResponseBody(response: Response): Promise<unknown> {
+  const raw = await response.text();
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { message: raw.slice(0, 800) };
+  }
+}
+
+async function createAnthropicMessage({
+  model,
+  instructions,
+  input,
+  maxOutputTokens,
+  language,
+}: {
+  model: string;
+  instructions: string;
+  input: ModelInputMessage[];
+  maxOutputTokens: number;
+  language: ResponseLanguage;
+}) {
+  if (!anthropicApiKey) {
+    throw new Error(modelConfigurationMessage({
+      provider: "anthropic",
+      model,
+      usageLabel: `anthropic:${model}`,
+      configured: false,
+      missingEnv: ["ANTHROPIC_API_KEY"],
+    }, language));
+  }
+
+  const response = await fetch(ANTHROPIC_MESSAGES_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": anthropicApiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxOutputTokens,
+      system: instructions,
+      messages: normalizeAnthropicMessages(input),
+    }),
+  });
+  const payload = await parseProviderResponseBody(response);
+  if (!response.ok) {
+    const details = extractProviderApiError(payload);
+    const base = language === "en" ? `Claude API error (${response.status})` : `Claude API 오류 (${response.status})`;
+    throw new Error(details ? `${base}: ${details}` : base);
+  }
+
+  return payload;
+}
+
+async function createModelResponse({
+  selectedModel,
+  instructions,
+  input,
+  maxOutputTokens,
+  language,
+}: {
+  selectedModel: SelectedModel;
+  instructions: string;
+  input: ModelInputMessage[];
+  maxOutputTokens: number;
+  language: ResponseLanguage;
+}) {
+  if (selectedModel.provider === "anthropic") {
+    const response = await createAnthropicMessage({
+      model: selectedModel.model,
+      instructions,
+      input,
+      maxOutputTokens,
+      language,
+    });
+    return {
+      response,
+      text: extractAnthropicText(response),
+      truncated: isAnthropicOutputTruncated(response),
+      providerName: "Claude",
+    };
+  }
+
+  if (!openAiClient) {
+    throw new Error(modelConfigurationMessage(selectedModel, language));
+  }
+
+  const response = await openAiClient.responses.create({
+    model: selectedModel.model,
+    instructions,
+    max_output_tokens: maxOutputTokens,
+    input,
+    ...(supportsReasoningConfig(selectedModel.model)
+      ? { reasoning: { effort: "low" as const } }
+      : {}),
+  });
+  return {
+    response,
+    text: extractOpenAIText(response),
+    truncated: isOpenAIOutputTruncated(response),
+    providerName: "OpenAI",
+  };
 }
 
 const DIFFICULTY_INSTRUCTIONS: Record<DifficultyMode, string> = {
@@ -183,7 +711,6 @@ const INSTRUCTIONS = [
   SYSTEM_PROMPT,
   TERM_MAPPING,
   DISCLOSURE_RULES,
-  STARTING_SCENARIOS,
 ].join("\n\n---\n\n");
 
 const MEMORY_CAPTURE_RULE = `Memory Capture Rule:
@@ -194,17 +721,36 @@ Do not ask the player whether to remember it. Do not mention memory capture in t
 If nothing important changed, omit [Memory].
 Keep [Choices] as the final section.`;
 
+const WORLD_DETAIL_RULE = `World Detail Use Rule:
+- Use TIU world detail as scene evidence, not as explanation. Prefer one to three concrete details per turn: a document title, local procedure, person, place, device, timestamp, payment trace, sign, or contradiction.
+- Pull detail from the active route, player memo, summary memory, current scene, and established contacts before introducing new factions or entities.
+- Do not mix unrelated route incidents just because they exist in the wider setting. Let hidden canon stay hidden until the current investigation earns access.
+- Keep visible paragraphs short. If a detail is background-only, place it in briefing, clue, memory, or choices rather than long narration.
+- When the world needs to feel larger, show who is affected or who is waiting for the player's reply.`;
+
+const EARNED_DISCLOSURE_RULE = `Evidence-Gated Disclosure Rule:
+- Sensitive canon and PRIVATE information are locked by default, especially in openings, direct guesses, or meta questions.
+- A correct name typed by the player is not proof. Do not confirm sensitive facts just because the player names them.
+- Reveal sensitive information only when the current case has an evidence chain: concrete clues plus a verification action such as record recovery, witness corroboration, field observation, access approval, sample/readout, timeline match, or coordinate check.
+- If the player has a strong inference but no verification yet, acknowledge it as a hypothesis and offer verification choices rather than confirming it.
+- When a reveal is earned, disclose only the specific fact tied to the current case, through an in-world artifact, limited NPC testimony, field result, or damaged terminal output.
+- Keep deeper origins, upper structures, and full cosmology redacted unless separately earned much later.`;
+
 const OPENING_FLOW_RULE = `Opening Flow Rule:
 - Any start must connect smoothly in this order: player role -> immediate place or device -> human contact or system notice -> first clue -> choices.
 - A new character should not be dropped into an abstract lore explanation. Begin with what they are doing, who contacted them, and why the first clue is their problem.
-- If the player creates a custom character, echo only the useful parts of the character sheet naturally. Do not dump the sheet as a block unless the player wrote it that way.
-- If age, money, or items were auto-filled, mention it briefly as a session calibration note, then move into the scene.
+- If the player creates a custom character, do not restate the character sheet in the story. Keep identity, age, items, and money in briefing/state unless directly relevant.
+- If age, money, or items were auto-filled, record them quietly in briefing/state. Do not mention the auto-fill in visible narration.
+- Do not explain the world premise in the opening. The first screen should feel like a scene already in motion, not a lore summary.
 - Introduce one practical contact when useful: editor, clerk, handler, instructor, dispatcher, guard, witness, or informant. The contact can ask a question, warn the player, or hand over a file.
 - Preserve hidden canon: do not expose secret faction names, entity identities, or internal codes in the opening unless the player character would already know them. Use public-facing labels first.
 - The final choices should feel like the character's next plausible actions, not generic menu commands.`;
 
 const CONVERSATIONAL_PLAY_RULE = `Conversational Play Rule:
 - The session should feel like the player is talking with people inside a scene, not clicking a dry command list.
+- Treat suggested choices as the main play interface. Keep them specific, conversational, and directly usable so the player rarely needs to type a custom action.
+- Do not depend on freeform typing for normal play. The default input mode is choices only.
+- If a scene genuinely needs the player to type a short custom question or correction, include a short [Question] section before [Choices]. Use this rarely.
 - Before [Choices], end the visible scene with a human handoff whenever possible: an NPC question, hesitation, warning, glance, message, or system prompt that naturally invites the player's reply.
 - If an NPC just spoke, give them a small emotional beat or direct question before choices. Example: "임태오가 당신 표정을 살피며 묻습니다. '어때, 무슨 말인지 이해했어?'"
 - Choices should read like natural intentions, replies, or specific actions. Prefer "그럼 변경 로그부터 볼게요. 임태오에게 요청한다" over "변경 로그를 확인한다".
@@ -213,6 +759,22 @@ const CONVERSATIONAL_PLAY_RULE = `Conversational Play Rule:
 - If a scene has no visible NPC, create a human-scale contact point: a caller, sender, desk clerk, field operator, archived voice note, terminal prompt, or the player's own uneasy thought.
 - Every generated choice should answer the last human pressure in the scene: reply to the speaker, ask a follow-up, protect someone, challenge a claim, buy time, or act while telling someone what you are doing.
 - Avoid choices that are only nouns or commands such as "기록 확인", "이동", "조사한다", "Open file", or "Continue".`;
+
+const SCENE_READABILITY_RULE = `Scene Readability Rule:
+- Keep each visible turn compact: usually 2-5 short paragraphs, one to three sentences each.
+- First answer the player's last choice, then add one concrete clue, one human reaction, or one complication. Do not stack multiple unrelated revelations.
+- Prefer a natural spoken line, a physical action, or a terminal prompt over abstract world explanation.
+- Do not restate the character sheet, inventory, money, or broad world premise in narration when briefing/state already carries it.
+- Use line breaks for readability. In Korean, avoid long noun-heavy report sentences; write like a scene someone can answer.
+- End the scene with a living pressure point before [Choices]: a question, a waiting glance, a ringing call, a terminal confirmation, or the player's own uneasy thought.`;
+
+const CURIOSITY_LOOP_RULE = `Curiosity Loop Rule:
+- Every turn should make the player want to answer the next small question, not merely finish an assigned task.
+- React to the player's latest choice first, then reveal exactly one odd detail that contradicts an ordinary expectation.
+- Keep hidden lore behind the evidence chain. Let the player care about a person, message, object, or missing record before explaining any faction or entity.
+- Use human friction: an NPC hesitates, lies badly, gets interrupted, notices the player's face, or asks what the player really thinks.
+- End with a decision that feels like belief, risk, trust, protection, or suspicion. Avoid endings that only say "what do you do next?"
+- For the first three AI turns of a session, prioritize immediate scene texture, dialogue, and small contradictions over broad world history.`;
 
 const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - Treat the first user message, selected route, character job, player memo, and summary memory as the active session anchor.
@@ -228,33 +790,10 @@ const SESSION_CONTINUITY_RULE = `Session Continuity Rule:
 - A Midas-Hand reporter or urban-legend journalist session should stay centered on Midas-Hand leads: deleted articles, suspicious contracts, informants, ownership records, money trails, cult rumors, and public-facing conspiracy evidence.
 - If earlier assistant text accidentally introduced a mismatched starter incident, treat it as a misfiled queue item or corrupted feed, then return to the active character's case without making the player repair the continuity.`;
 
-function withSessionPrelude(response: GameResponse, language: ResponseLanguage, routeName?: string | null): GameResponse {
-  const isAntarctic = /남극|거대공동|L3|Antarctic|Hollow/i.test(routeName ?? response.raw ?? response.narrative);
-  const prelude = language === "en"
-    ? isAntarctic
-      ? `[Session Entry]
-January 2032. The access terminal opens only the public layer of the assignment: Antarctic hollow survey, contract review, field safety.
-
-The classified name of the site is withheld. For now, the world gives you weather reports, changed coordinates, and one dispatch order that arrived before it was approved.`
-      : `[Session Entry]
-January 2032. The world does not begin by explaining itself. It gives you a role, a device or room, and one record that should not already know you.
-
-The deeper truth remains sealed. Your first useful thread is small enough to touch: a message, a file, a witness, or a place waiting for confirmation.`
-    : isAntarctic
-      ? `[Session Entry]
-2032년 1월. 접속 단말기는 이번 배정의 공개 층위만 엽니다. 남극 거대공동 조사, 계약 검토, 현장 안전 확인.
-
-현장의 내부 코드명과 원인은 아직 열람되지 않습니다. 지금 당신에게 보이는 것은 기상 보고, 어긋난 좌표, 승인보다 먼저 도착한 파견 명령뿐입니다.`
-      : `[Session Entry]
-2032년 1월. 세계는 처음부터 정답을 설명하지 않습니다. 먼저 당신에게 역할과 장소, 그리고 당신을 이미 알고 있는 듯한 기록 하나를 건넵니다.
-
-더 깊은 진실은 아직 잠겨 있습니다. 지금 붙잡을 수 있는 첫 실마리는 메시지, 파일, 목격자, 혹은 확인을 기다리는 장소입니다.`;
-
-  return {
-    ...response,
-    narrative: `${prelude}\n\n${response.narrative}`,
-    raw: `${prelude}\n\n${response.raw}`,
-  };
+function withSessionPrelude(response: GameResponse, _language: ResponseLanguage, _routeName?: string | null): GameResponse {
+  void _language;
+  void _routeName;
+  return response;
 }
 
 function buildRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage): string {
@@ -294,7 +833,7 @@ function buildRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage)
 - Core loop: dispatch order -> map mismatch -> route/version check -> field contact -> boundary consequence.
 - Recurring contacts: Tae-o Lim, instructor, dispatch controller, escort team.
 - Keep tension spatial and procedural: wrong roads, changed signs, missing approvals, quarantine timing.
-- Do not reveal the internal site code in opening narration unless the player discovers it through a record.
+- Do not reveal the internal site code in opening narration unless the player earns it through a record, field contradiction, or evidence chain.
 - Choices should preserve field judgment: verify, compare, mark coordinates, call support, decide whether to move.`
       : `Route Playbook: 남극 거대공동 현장 파견
 - 핵심 루프: 파견 지시 -> 지도 불일치 -> 경로/버전 확인 -> 현장 접점 -> 경계 결과.
@@ -430,19 +969,38 @@ function detectStarterRoute(input: string): string | null {
   return route?.label ?? null;
 }
 
+const PLAYER_ACCOUNT_NAME_PLACEHOLDER = "{user}";
+
+function isPlaceholderCharacterName(name: string): boolean {
+  return name === PLAYER_ACCOUNT_NAME_PLACEHOLDER || name === "당신";
+}
+
+function resolveCharacterName(name: string, accountName?: string): string {
+  if (!isPlaceholderCharacterName(name)) return name;
+  return accountName?.trim().slice(0, 24) || name;
+}
+
 function getCharacterName(input: string): string {
   const trimmed = input.trim();
-  if (/^START_ROUTE:/i.test(trimmed) || /^[1-3](?:[.)])?$/.test(trimmed)) return "당신";
-  const englishNameMatch = input.match(/(?:Name\s*[:：]\s*)([A-Za-z][A-Za-z0-9_-]{1,24})/i);
-  if (englishNameMatch) return englishNameMatch[1];
-  const nameMatch = input.match(/(?:이름\s*[:：]\s*)?([가-힣A-Za-z0-9_-]{2,12})/);
-  return nameMatch?.[1] ?? "당신";
+  if (/^START_ROUTE:/i.test(trimmed) || /^[1-3](?:[.)])?$/.test(trimmed)) return PLAYER_ACCOUNT_NAME_PLACEHOLDER;
+  const explicitNameMatch = input.match(/(?:이름|성명|name)\s*[:：]\s*([^/\n]+)/i);
+  const explicitName = explicitNameMatch?.[1]?.trim().replace(/\s+/g, " ");
+  if (explicitName) return explicitName.slice(0, 24);
+  const slashNameMatch = trimmed.match(/^([가-힣A-Za-z0-9_-]{2,24})\s*\/\s*(?:\d{1,3}|나이|age|직업|occupation)/i);
+  if (slashNameMatch && !/^(이름|성명|나이|직업|소속|소지품|소지금|name|age|job|items|funds)$/i.test(slashNameMatch[1])) {
+    return slashNameMatch[1];
+  }
+  return PLAYER_ACCOUNT_NAME_PLACEHOLDER;
 }
 
 function completeCharacterInput(input: string): { character: string; note: string } {
   const parts = [input.trim()];
   const added: string[] = [];
 
+  if (!/(?:이름|성명|name)\s*[:：]/i.test(input) && !/^[가-힣A-Za-z0-9_-]{2,24}\s*\/\s*(?:\d{1,3}|나이|age|직업|occupation)/i.test(input.trim())) {
+    parts.unshift(`이름: ${PLAYER_ACCOUNT_NAME_PLACEHOLDER}`);
+    added.push("이름 기본값");
+  }
   if (!/(?:나이|연령|age|years?\s*old|세)\s*[:：]?\s*\d+|\d+\s*(?:세|years?\s*old)/i.test(input)) {
     parts.push("나이: 29");
     added.push("나이 29세");
@@ -462,30 +1020,12 @@ function completeCharacterInput(input: string): { character: string; note: strin
 
   return {
     character: parts.join(" / "),
-    note: added.length > 0
-      ? `\n\n※ 캐릭터 입력에서 ${added.join(", ")} 정보가 비어 있어 임시 기본값으로 보정했습니다. 원하면 이후 행동으로 수정할 수 있습니다.`
-      : "",
+    note: "",
   };
 }
 
-function extractCharacterField(character: string, pattern: RegExp): string | null {
-  const match = character.match(pattern);
-  return match?.[1]?.trim().replace(/\s+/g, " ") ?? null;
-}
-
-function buildCharacterIdentityLine(character: string, name: string): string {
-  const rawAge = extractCharacterField(character, /(?:나이|연령|age)\s*[:：]\s*([^/\n]+)/i)
-    ?? character.match(/(\d+\s*(?:세|years?\s*old))/i)?.[1]?.trim()
-    ?? "나이 미확정";
-  const age = /^\d+$/.test(rawAge) ? `${rawAge}세` : rawAge;
-  const job = extractCharacterField(character, /(?:직업(?:\(소속\))?|소속|occupation|job|affiliation)\s*[:：]\s*([^/\n]+)/i)
-    ?? "민간 조사 협력자";
-  const items = extractCharacterField(character, /(?:소지품|장비|items?|equipment|gear)\s*[:：]\s*([^/\n]+)/i)
-    ?? "휴대폰, 신분증, 작은 손전등";
-  const funds = extractCharacterField(character, /(?:소지금|현금|돈|자금|funds?|cash|money)\s*[:：]?\s*([^/\n]+)/i)
-    ?? "50,000원";
-
-  return `${name}. 세션은 당신을 ${age}의 ${job}로 등록합니다. 현재 확인된 소지품은 ${items}, 소지금은 ${funds}입니다.`;
+function buildCharacterIdentityLine(_character: string, name: string): string {
+  return name && !isPlaceholderCharacterName(name) ? `${name}.` : "";
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -501,6 +1041,153 @@ const STATE_LABELS: Record<string, string> = {
 
 function getFirstUserText(messages: ChatMessage[]): string {
   return messages.find((message) => message.role === "user")?.content ?? "";
+}
+
+function cleanRouteSource(messages: ChatMessage[]): string {
+  return messages.map((message) => message.content).join("\n");
+}
+
+function messagesBeforeLastAssistant(messages: ChatMessage[]): ChatMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "assistant") return messages.slice(0, index);
+  }
+
+  return messages;
+}
+
+function buildContinuationBridge(text: string): string {
+  const beforeChoices = text.split(/\n\s*\[Choices\]/i)[0] ?? text;
+  const lines = beforeChoices
+    .replace(/\[(?:Scene|State|Memory|Briefing|Choices)\]/gi, "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const tail = lines.slice(-3).join("\n");
+  return tail.slice(-900);
+}
+
+function isStreamerSource(source: string): boolean {
+  return /스트리머|유튜버|유튜브|아프리카\s*TV|아프리카TV|트위치|방송인|크리에이터|라이브\s*방송|streamer|youtuber|youtube|twitch|afreeca|creator|live\s*stream/i.test(source);
+}
+
+function buildCleanRoutePlaybook(messages: ChatMessage[], language: ResponseLanguage): string {
+  const source = cleanRouteSource(messages);
+  if (!source.trim()) return buildRoutePlaybook(messages, language);
+  const writeLanguage = language === "en" ? "English" : "Korean";
+
+  if (isStreamerSource(source)) {
+    return `Route Playbook: Live Creator / Streamer
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: live schedule -> strange clip or donation -> moderator/chat reaction -> platform records -> real-world lead.
+- Recurring contacts: channel manager, moderator, anonymous clip uploader, sponsor or platform support staff.
+- Keep the danger public-facing first: wrong upload times, copied thumbnails, live-chat pressure, sponsorship files, location traces, and audience rumors.
+- Do not reveal hidden canon or make the player a canon entity. Treat the player as an outside creator encountering TIU through a broadcastable case.
+- Choices should fit what a streamer can do: delay stream, ask the moderator, check studio logs, open a clip, poll chat, cut the feed, or leave to verify a lead.`;
+  }
+
+  if (/마이더스\s*손|마이더스손|괴담\s*조사|도시\s*괴담|midas[-\s]*hand|midas/i.test(source)) {
+    return `Route Playbook: Midas-Hand Reporter
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: public rumor -> deleted article or contract -> human source -> ownership or money trail.
+- Recurring contacts: Yoon Seo-ha, AfterGold_0310, ad/contract staff, property registry clerks.
+- Keep danger social and documentary first: erased drafts, false sponsorship files, altered ownership records, account pressure.
+- Do not import Korean Barrier child-voice, KR-INIT-001, Antarctic/L3, or Sovari incidents unless the player explicitly connects them.`;
+  }
+
+  if (/KR-?INIT-?001|잔여\s*문서|복원\s*로그|기록\s*관리|열람\s*등급|archive|records|restoration|clearance/i.test(source)) {
+    return `Route Playbook: KR-INIT-001 Records
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: archive access -> restoration trace -> clearance mismatch -> human authorization -> concealed response record.
+- Recurring contacts: Oh Yeon-ju, archive security, anonymous restoration requester.
+- Keep choices about logs, permissions, redactions, preservation rooms, and access risk.
+- Do not pivot to unrelated field horror without a record, call, or official transfer.`;
+  }
+
+  if (/L3|남극|거대공동|극지|현장\s*파견|계약\s*분석|진입\s*경로|지도\s*단말기|field dispatch|antarctic|hollow|entry route|field analyst/i.test(source)) {
+    return `Route Playbook: Antarctic Hollow Field Dispatch
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: dispatch order -> map mismatch -> route/version check -> field contact -> boundary consequence.
+- Recurring contacts: Lim Tae-o, instructor, dispatch controller, escort team.
+- Keep tension spatial and procedural: wrong roads, changed signs, missing approvals, quarantine timing.
+- Do not reveal internal site codes or entity identities in the opening. They can surface only through records, field contradictions, or an earned evidence chain.
+- Choices should preserve field judgment: verify, compare, mark coordinates, call support, decide whether to move.`;
+  }
+
+  if (/한국\s*방벽|방벽\s*내부|생활구|민간\s*조사|주민\s*신고|child voice|living zone|barrier/i.test(source)) {
+    return `Route Playbook: Korean Barrier Civil Investigation
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: resident report -> residence record -> caller or neighbor -> local procedure -> first fracture.
+- Recurring contacts: Park Min-jae, caller, living-zone clerk, escort guard.
+- Keep the scene grounded in civic procedure before revealing anomalies.
+- The child-voice report belongs here and should not spread to other routes by default.`;
+  }
+
+  if (/소바리|무전소|산\s*능선|sovari|radio station|ridge/i.test(source)) {
+    return `Route Playbook: Sovari Peripheral Search
+- Write visible narration and choices in ${writeLanguage}.
+- Core loop: local testimony -> radio timestamp -> ridge sign -> missing team trace -> temporal contradiction.
+- Recurring contacts: elder Naro, radio operator, missing team file, local guide.
+- Keep the mood quiet and uncertain; use folklore and records before direct confrontation.`;
+  }
+
+  return `Route Playbook: Open Custom Start
+- Write visible narration and choices in ${writeLanguage}.
+- Build the first case from the player's job, items, funds, and first clue.
+- Choose one practical contact and one concrete immediate pressure point.
+- Keep the next choices anchored to what this character can actually do.`;
+}
+
+function buildCleanSessionAnchor(messages: ChatMessage[], language: ResponseLanguage): string {
+  const firstUser = getFirstUserText(messages);
+  const source = cleanRouteSource(messages);
+  if (!source.trim()) return buildSessionAnchor(messages, language);
+  const writeLanguage = language === "en" ? "English" : "Korean";
+
+  if (isStreamerSource(source)) {
+    return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- Route: live creator / streamer custom start.
+- Keep the story centered on the player's broadcast identity, platform records, moderators, chat pressure, suspicious clips, upload times, and real-world verification.
+- Do not drift into an unrelated starter route unless the player explicitly follows a lead there.`;
+  }
+
+  if (/마이더스\s*손|마이더스손|괴담\s*조사|도시\s*괴담|midas[-\s]*hand|midas/i.test(source)) {
+    return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- Route: Midas-Hand urban legend reporter.
+- Keep the story about Midas-Hand leads: erased article drafts, informant DM, suspicious contract files, ownership transfer records, small money trails, and public-facing conspiracy evidence.
+- Do not drift into Korean Barrier, KR-INIT-001, Antarctic/L3, or Sovari incidents unless the player explicitly makes that connection.`;
+  }
+
+  if (/KR-?INIT-?001|잔여\s*문서|복원\s*로그|기록\s*관리|열람\s*등급|archive|records/i.test(source)) {
+    return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- Route: KR-INIT-001 residual records.
+- Keep the story centered on deleted documents, restoration logs, clearance mismatches, and archive access traces.`;
+  }
+
+  if (/L3|남극|거대공동|극지|현장\s*파견|계약\s*분석|field support|field analyst|antarctic|hollow/i.test(source)) {
+    return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- Route: Antarctic hollow field dispatch.
+- Keep the story centered on route errors, map/reality mismatch, quarantine pressure, and field-team judgment.
+- Sensitive codes or entity identities stay hidden until the player verifies them through an evidence chain.`;
+  }
+
+  if (/한국\s*방벽|방벽\s*내부|생활구|민간\s*조사|주민\s*신고|child voice|living zone|barrier/i.test(source)) {
+    return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- Route: Korean Barrier civilian investigation.
+- The child-voice complaint may be used here because it belongs to this route.`;
+  }
+
+  if (!firstUser.trim()) return "";
+
+  return `Active Session Anchor:
+- Write visible narration and choices in ${writeLanguage}.
+- First character statement: ${firstUser.slice(0, 240)}
+- Continue from this character and their latest action. Do not restart with an unrelated starter case.`;
 }
 
 function extractInventory(messages: ChatMessage[], language: ResponseLanguage): string[] {
@@ -565,14 +1252,14 @@ function extractStateRows(text: string): string[] {
 }
 
 function extractTime(text: string, language: ResponseLanguage): string {
-  if (/새벽\s*2시\s*17분/.test(text)) return "2032년 1월 1일 02:17 AM";
-  if (/오전\s*7시\s*40분/.test(text)) return "2032년 1월 1일 07:40 AM";
-  if (/내일\s*오전/.test(text)) return "2032년 1월 2일 오전";
-  if (/내일\s*오후/.test(text)) return "2032년 1월 2일 오후";
-  if (/2:17|02:17/.test(text)) return "January 1, 2032 02:17 AM";
-  if (/7:40|07:40/.test(text)) return "January 1, 2032 07:40 AM";
-  if (language === "en") return "January 1, 2032 00:00 AM";
-  return "2032년 1월 1일 00:00 AM";
+  if (/새벽\s*2시\s*17분/.test(text)) return "2032년 02:17 AM";
+  if (/오전\s*7시\s*40분/.test(text)) return "2032년 07:40 AM";
+  if (/내일\s*오전/.test(text)) return "2032년 다음 날 오전";
+  if (/내일\s*오후/.test(text)) return "2032년 다음 날 오후";
+  if (/2:17|02:17/.test(text)) return "2032 02:17 AM";
+  if (/7:40|07:40/.test(text)) return "2032 07:40 AM";
+  if (language === "en") return "2032 / time unconfirmed";
+  return "2032년 / 시각 미확인";
 }
 
 function extractStatus(text: string, language: ResponseLanguage): string {
@@ -616,7 +1303,7 @@ function extractPeople(text: string, messages: ChatMessage[], language: Response
   const characterName = getCharacterName(getFirstUserText(messages));
   const isMidasRoute = /마이더스\s*손|마이더스손|midas[-\s]*hand|midas/i.test(source);
 
-  if (characterName !== "당신") {
+  if (!isPlaceholderCharacterName(characterName)) {
     people.push({
       name: characterName,
       emotion: language === "en" ? "Calm" : "평온",
@@ -833,6 +1520,8 @@ function extractClues(text: string, messages: ChatMessage[], language: ResponseL
 function stripSystemLog(text: string): string {
   return text
     .replace(/^\s*\[Scene\]\s*/i, "")
+    .replace(/\n?\[Question\][\s\S]*?(?=\n\[Choices\]|\n\[[^\]]+\]|$)/gi, "")
+    .replace(/\n?\[Freeform\][\s\S]*?(?=\n\[Choices\]|\n\[[^\]]+\]|$)/gi, "")
     .replace(/\n?\[Memory\][\s\S]*?(?=\n\[Choices\]|\n\[[^\]]+\]|$)/gi, "")
     .replace(/\n?\[State\][\s\S]*?(?=\n\[Choices\]|\n\[[^\]]+\]|$)/g, "")
     .trim();
@@ -1151,6 +1840,14 @@ function humanizeChoiceText(text: string, language: ResponseLanguage): string {
   return `"좋아요. 제가 먼저 해볼게요." ${clean}`;
 }
 
+function shouldAllowShortQuestionInput(response: Pick<GameResponse, "raw" | "narrative" | "choices">): boolean {
+  const beforeChoices = response.raw.split(/\n\s*\[Choices\]/i)[0] ?? response.raw;
+  const source = `${beforeChoices}\n${response.narrative}`;
+
+  return /\[(?:Question|Freeform|Ask)\]/i.test(source)
+    || /(?:짧은|직접)\s*(?:질문|입력|보정)|질문을\s*입력|궁금한\s*점을\s*직접|직접\s*묻고\s*싶은|ask a short question|type a question|custom question|brief correction/i.test(source);
+}
+
 function applyConversationalLayer(response: GameResponse, messages: ChatMessage[], language: ResponseLanguage): GameResponse {
   const narrative = ensureConversationalHandoff(stripSystemLog(response.narrative), response, messages, language);
   const choices = response.choices.map((choice) => ({
@@ -1161,11 +1858,15 @@ function applyConversationalLayer(response: GameResponse, messages: ChatMessage[
     ...response,
     narrative,
     choices,
+    allow_freeform: Boolean(response.allow_freeform) || shouldAllowShortQuestionInput(response),
   };
 }
 
 function withBriefing(response: GameResponse, messages: ChatMessage[], language: ResponseLanguage = "ko"): GameResponse {
   const conversationalResponse = applyConversationalLayer(response, messages, language);
+  const briefing = buildBriefing(conversationalResponse, messages, language) as NonNullable<GameResponse["briefing"]>;
+  const engine = buildGameEngineState(conversationalResponse, messages, briefing, language);
+  const engineLogs = engineStateToBriefingLogs(engine, language);
   const memory_updates = Array.from(
     new Set([
       ...(conversationalResponse.memory_updates ?? []),
@@ -1175,17 +1876,161 @@ function withBriefing(response: GameResponse, messages: ChatMessage[], language:
 
   return {
     ...conversationalResponse,
-    briefing: buildBriefing(conversationalResponse, messages, language),
+    briefing: {
+      ...briefing,
+      logs: [...engineLogs, ...briefing.logs].slice(0, 8),
+    },
     memory_updates,
+    engine,
   };
 }
 
-function buildCustomCharacterOpening(input: string): GameResponse {
+const CANON_CHARACTER_START_BLOCKS = [
+  {
+    label: "이중철",
+    pattern: /이\s*중\s*철|lee\s*jung\s*chul|jungchul/i,
+    directPattern: /(?:이\s*중\s*철|lee\s*jung\s*chul|jungchul)\s*(?:로|으로)\s*(?:시작|플레이|진입)|(?:play|start)\s+as\s+(?:lee\s*jung\s*chul|jungchul)/i,
+  },
+  {
+    label: "베버",
+    pattern: /베버|weber/i,
+    directPattern: /(?:베버|weber)\s*(?:로|으로)\s*(?:시작|플레이|진입)|(?:play|start)\s+as\s+weber/i,
+  },
+  {
+    label: "서하은",
+    pattern: /서\s*하\s*은|seo\s*ha\s*eun|haeun/i,
+    directPattern: /(?:서\s*하\s*은|seo\s*ha\s*eun|haeun)\s*(?:로|으로)\s*(?:시작|플레이|진입)|(?:play|start)\s+as\s+(?:seo\s*ha\s*eun|haeun)/i,
+  },
+] as const;
+
+const FORCED_CANON_RELATION_PATTERN =
+  /남편|아내|배우자|연인|애인|약혼|가족|딸|아들|자식|부모|아버지|어머니|형제|누나|언니|오빠|동생|친척|후계자|제자|비서|조수|대리인|분신|클론|복제|또\s*다른|또다른|AI|아바타|husband|wife|spouse|lover|fiance|family|daughter|son|child|parent|sibling|successor|assistant|agent|avatar|clone|another\s+ai/i;
+
+function detectCanonStartBlock(input: string): string | null {
+  const explicitName = input.match(/(?:이름|성명|name)\s*[:：]\s*([^/\n]+)/i)?.[1] ?? "";
+
+  for (const target of CANON_CHARACTER_START_BLOCKS) {
+    if (explicitName && target.pattern.test(explicitName)) return target.label;
+    if (target.directPattern.test(input)) return target.label;
+    if (target.pattern.test(input) && FORCED_CANON_RELATION_PATTERN.test(input)) return target.label;
+  }
+
+  if (
+    /관측자|observer/i.test(input)
+    && /또\s*다른|또다른|AI|분신|아바타|대리자|내부\s*시점|play\s+as|start\s+as|another\s+ai|avatar|agent/i.test(input)
+  ) {
+    return "관측자 관련 시점";
+  }
+
+  return null;
+}
+
+function buildCanonStartBlockedResponse(blockedLabel: string, language: ResponseLanguage): GameResponse {
+  if (language === "en") {
+    const narrative = `[Scene]
+That character or relationship is protected canon and cannot be used as the player viewpoint.
+
+Existing canon characters, forced spouse/family/avatar/AI relationships, and Observer-side internal viewpoints are outside session start authority.
+You can still investigate them from the outside, enter the same incident zone as a new person, or return to a public starting route.`;
+
+    const raw = `${narrative}
+
+[Choices]
+1. "I'll approach this as an outside investigator." Investigate ${blockedLabel} without playing them.
+2. "Make me a new person in the same incident zone." Start with a new role and practical belongings.
+3. "Return to the public routes." Choose an official starting route.`;
+
+    return {
+      narrative,
+      choices: [
+        { text: `"I'll approach this as an outside investigator." Investigate ${blockedLabel} without playing them.` },
+        { text: `"Make me a new person in the same incident zone." Start with a new role and practical belongings.` },
+        { text: `"Return to the public routes." Choose an official starting route.` },
+      ],
+      allow_freeform: true,
+      raw,
+    };
+  }
+
+  const narrative = `[Scene]
+해당 인물 또는 관계는 정본 보호 대상이라 플레이어 시점으로 사용할 수 없습니다.
+
+이미 세계관에 정의된 인물, 그 배우자나 가족, 분신, 클론, 또 다른 AI 같은 강제 관계, 관측자 계열 내부 시점은 세션 시작 권한 밖에 있습니다.
+대신 그 인물을 조사하는 외부자, 같은 사건권역의 신규 인물, 혹은 공개 시작 루트로 진입할 수 있습니다.`;
+
+  const raw = `${narrative}
+
+[Choices]
+1. "외부 조사자 시점으로 바꿀게요." ${blockedLabel}을 직접 플레이하지 않고 주변 기록을 조사한다.
+2. "같은 사건권역의 새 인물로 시작할게요." 직업과 소지품만 새로 잡는다.
+3. "공개 시작 루트로 돌아갈게요." 공식 시작 루트 중 하나를 고른다.`;
+
+  return {
+    narrative,
+    choices: [
+      { text: `"외부 조사자 시점으로 바꿀게요." ${blockedLabel}을 직접 플레이하지 않고 주변 기록을 조사한다.` },
+      { text: `"같은 사건권역의 새 인물로 시작할게요." 직업과 소지품만 새로 잡는다.` },
+      { text: `"공개 시작 루트로 돌아갈게요." 공식 시작 루트 중 하나를 고른다.` },
+    ],
+    allow_freeform: true,
+    raw,
+  };
+}
+
+function buildCustomCharacterOpening(input: string, accountName?: string): GameResponse {
   const completed = completeCharacterInput(input);
   const character = completed.character;
-  const name = getCharacterName(character);
+  const rawName = getCharacterName(character);
+  const name = resolveCharacterName(rawName, accountName);
+  const playerLabel = isPlaceholderCharacterName(name) ? "접속자" : name;
   const identityLine = buildCharacterIdentityLine(character, name);
-  const briefingMessages: ChatMessage[] = [{ role: "user", content: character }];
+  const characterForBriefing = accountName ? character.replaceAll(PLAYER_ACCOUNT_NAME_PLACEHOLDER, accountName) : character;
+  const briefingMessages: ChatMessage[] = [{ role: "user", content: characterForBriefing }];
+
+  if (isStreamerSource(character)) {
+    const narrative = `[Scene]
+${identityLine}
+${completed.note}
+
+방송 시작 6분 전, 송출 프로그램의 미리보기 화면이 한 번 검게 꺼집니다.
+채팅창에는 아직 대기 인원 숫자만 올라가는데, 매니저 계정 하나가 삭제된 클립 링크를 조용히 올립니다.
+
+"${playerLabel}, 오늘 콘텐츠 그거 맞지?
+근데 방금 같은 제목의 영상이 이미 올라왔어. 업로더 이름이 네 계정으로 되어 있어."
+
+링크의 썸네일에는 당신의 방 배경과 같은 각도, 같은 조명이 찍혀 있습니다.
+문제는 영상 길이가 2시간 17분이고, 업로드 시각은 아직 오지 않은 오늘 밤입니다.
+
+매니저가 다시 묻습니다.
+
+"방송 켤 거야, 아니면 먼저 이 링크부터 닫을까?"
+
+[State]
+Disclosure Level: PUBLIC
+Boundary Stability: 안정
+Faction Heat: 플랫폼 계정 주시
+Visible Classification: 방송 사고 / 계정 도용 의심`;
+
+    const raw = `${narrative}
+
+[Choices]
+1. "송출은 잠깐 보류해." 삭제된 클립 원본을 확인한다.
+2. "채팅에 티 내지 마. 매니저 방으로만 보내." 링크와 업로더 정보를 받는다.
+3. "방송 켠 상태로 확인할게." 시청자 반응을 지켜보며 링크를 연다.
+4. "내 계정 로그인 기록부터 볼게." 플랫폼 접속 기록을 확인한다.`;
+
+    return withBriefing({
+      narrative,
+      choices: [
+        { text: "\"송출은 잠깐 보류해.\" 삭제된 클립 원본을 확인한다." },
+        { text: "\"채팅에 티 내지 마. 매니저 방으로만 보내.\" 링크와 업로더 정보를 받는다." },
+        { text: "\"방송 켠 상태로 확인할게.\" 시청자 반응을 지켜보며 링크를 연다." },
+        { text: "\"내 계정 로그인 기록부터 볼게.\" 플랫폼 접속 기록을 확인한다." },
+      ],
+      allow_freeform: false,
+      raw,
+    }, briefingMessages);
+  }
 
   if (/기자|취재|괴담|마이더스|midas[-\s]*hand|midas/i.test(character)) {
     const narrative = `[Scene]
@@ -1196,21 +2041,13 @@ ${completed.note}
 
 편집 데스크 윤서하에게서도 메시지가 와 있습니다.
 
-"${name}, 네 초안이 CMS에서 사라졌어.
+"${playerLabel}, 네 초안이 CMS에서 사라졌어.
 그런데 광고팀에는 같은 제목의 협찬 제안서가 올라와 있어. 네가 보낸 거 아니지?"
 
-"당신이 아직 쓰지 않은 기사 초안이 세 번 삭제됐습니다.
-제목은 같습니다.
-마이더스손은 사람을 죽이지 않는다. 소유주를 바꾼다."
+제보 계정 AfterGold_0310은 삭제된 기사 복구 로그, 협찬 제안서, 폐상가 3층 라커 사진을 보냈습니다.
+마지막 문장은 짧습니다.
 
-첨부 파일은 세 개입니다. 삭제된 기사 복구 로그, 광고 계약서 스캔본, 그리고 폐상가 3층 라커 17번을 찍은 흐린 사진입니다.
-계약서의 서명란에는 당신 이름의 초성이 들어가 있고, 지급액은 방금 캐릭터가 적은 소지금과 같은 단위로 맞춰져 있습니다.
-
-제보자 계정은 마지막으로 이렇게 보냈습니다.
-
-"마이더스손을 팔로우한 사람은 돈을 받은 게 아닙니다.
-자기 기록의 소유권을 넘긴 겁니다.
-오늘 03:10 전에 라커를 열지 않으면, 당신 기사도 누군가의 이름으로 발행됩니다."
+"03:10 전에 라커를 열지 않으면, 네 기사는 다른 이름으로 발행됩니다."
 
 윤서하가 다시 메시지를 보냅니다.
 
@@ -1239,7 +2076,7 @@ Visible Classification: 민간 괴담 / 확인 보류`;
         { text: "\"제보자가 어디서 보냈는지 볼게.\" AfterGold_0310의 접속 위치를 추적한다." },
         { text: "\"라커가 미끼여도 직접 확인해야 해.\" 폐상가 3층으로 향한다." },
       ],
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
     }, briefingMessages);
   }
@@ -1287,7 +2124,7 @@ Visible Classification: 남극 거대공동 조사 / 확인 전`;
         { text: "\"이전 경로 버전이 남아 있나요?\" 단말기의 변경 전 좌표를 조회한다." },
         { text: "말없이 현재 좌표를 사진으로 남기고, 임태오의 반응을 본다." },
       ],
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
     }, briefingMessages);
   }
@@ -1336,7 +2173,7 @@ Boundary Stability: 안정`;
         { text: "\"등급이 왜 틀렸는지부터 보죠.\" 열람 등급 사유를 조회한다." },
         { text: "말없이 화면을 캡처하고 접속을 끊을 준비를 한다." },
       ],
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
     }, briefingMessages);
   }
@@ -1383,7 +2220,7 @@ Visible Classification: 주민 신고 / 확인 필요`;
         { text: "\"기록부터 맞춰보죠.\" 옆집 주소의 거주 기록을 조회한다." },
         { text: "\"혼자 가긴 찜찜합니다.\" 현장 동행 요청을 넣는다." },
       ],
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
     }, briefingMessages);
   }
@@ -1431,7 +2268,7 @@ Visible Classification: 실종 조사 / 시간 기록 오류`;
         { text: "\"그 사람들이 정말 출발했는지부터 보죠.\" 출발 기록을 확인한다." },
         { text: "말없이 무전 원본을 복사하고, 재생 시간을 다시 본다." },
       ],
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
     }, briefingMessages);
   }
@@ -1477,7 +2314,7 @@ Visible Classification: 개인 기록 오류 / 확인 필요`;
       { text: "먼저 진동한 소지품을 꺼내 확인한다." },
       { text: "\"내가 왜 여기에 있는지부터 정리하자.\" 소속과 목적을 더 구체화한다." },
     ],
-    allow_freeform: true,
+    allow_freeform: false,
     raw,
   }, briefingMessages);
 }
@@ -1485,55 +2322,55 @@ Visible Classification: 개인 기록 오류 / 확인 필요`;
 const STARTER_ROUTE_OPENINGS: Record<string, GameResponse> = {
   "한국 방벽 내부 민간 조사 보조원": {
     narrative: `[Scene]
-비가 오는 오전 7시 40분.
-방벽 내부 제12생활구 민원 접수실에는 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
+방벽 내부 제12생활구 민원 접수실. 비에 젖은 우산들이 출입문 옆에 기대어 있습니다.
 
-당신은 오늘부터 주민 신고와 생활구 기록을 대조하는 민간 조사 보조원으로 배정되었습니다.
-선임 조사 보조원 박민재가 출근 확인도 끝나기 전에 당신의 단말기 쪽으로 새 업무를 밀어 넣습니다.
+선임 조사 보조원 박민재가 수화기를 손바닥으로 막은 채 당신을 봅니다.
 
-"평범한 민원처럼 보이는데, 자동 분류가 두 번 실패했어.
-신고자는 겁먹었고, 생활구 기록은 이상하게 조용해."
+"일단 듣고만 있어.
+이상하면 바로 끊어도 돼."
 
-단말기에 올라온 신고 내용은 짧습니다.
+수화기 너머에서는 아이 목소리가 같은 문장을 세 번째 반복합니다.
 
-"어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
-그 집에는 아이가 없습니다."
+"문 열어주세요. 저 여기 살아요."
 
-박민재가 당신에게 수화기를 밀어놓고 묻습니다.
+단말기에는 해당 세대 구성원 2명, 미성년자 없음이라고 뜹니다.
+그런데 민원 시스템은 방금 같은 주소로 소아과 예약 알림 하나를 띄웁니다.
 
-"바로 전화할래?
-아니면 기록부터 맞춰보고, 사람이 거짓말하는 건지 시스템이 빠뜨린 건지 보겠어?"
+박민재가 수화기를 조금 더 가까이 밀며 낮게 묻습니다.
+
+"너라면 어디부터 의심할래.
+신고자, 기록, 아니면 저 목소리?"
 
 [State]
 Disclosure Level: PUBLIC
 Boundary Stability: 안정
 Visible Classification: 주민 신고 / 확인 필요`,
     choices: [
-      { text: "\"비슷한 신고가 있었나요?\" 박민재에게 먼저 묻는다." },
-      { text: "\"제가 바로 전화해볼게요.\" 신고자에게 연락한다." },
-      { text: "\"기록부터 맞춰보죠.\" 옆집 주소의 거주 기록을 조회한다." },
-      { text: "\"혼자 가긴 찜찜합니다.\" 현장 동행 요청을 넣는다." },
+      { text: "\"방금 목소리, 녹음 남겼나요?\" 박민재에게 먼저 묻는다." },
+      { text: "\"신고자랑 직접 통화해볼게요.\" 수화기를 받는다." },
+      { text: "\"소아과 예약 기록부터 볼게요.\" 같은 주소의 생활구 기록을 대조한다." },
+      { text: "\"현장 가려면 둘이 가죠.\" 동행 경비를 요청한다." },
     ],
-    allow_freeform: true,
+    allow_freeform: false,
     raw: `[Scene]
-비가 오는 오전 7시 40분.
-방벽 내부 제12생활구 민원 접수실에는 젖은 우산 냄새와 오래된 소독약 냄새가 섞여 있습니다.
+방벽 내부 제12생활구 민원 접수실. 비에 젖은 우산들이 출입문 옆에 기대어 있습니다.
 
-당신은 오늘부터 주민 신고와 생활구 기록을 대조하는 민간 조사 보조원으로 배정되었습니다.
-선임 조사 보조원 박민재가 출근 확인도 끝나기 전에 당신의 단말기 쪽으로 새 업무를 밀어 넣습니다.
+선임 조사 보조원 박민재가 수화기를 손바닥으로 막은 채 당신을 봅니다.
 
-"평범한 민원처럼 보이는데, 자동 분류가 두 번 실패했어.
-신고자는 겁먹었고, 생활구 기록은 이상하게 조용해."
+"일단 듣고만 있어.
+이상하면 바로 끊어도 돼."
 
-단말기에 올라온 신고 내용은 짧습니다.
+수화기 너머에서는 아이 목소리가 같은 문장을 세 번째 반복합니다.
 
-"어젯밤부터 옆집 아이가 같은 문장을 반복합니다.
-그 집에는 아이가 없습니다."
+"문 열어주세요. 저 여기 살아요."
 
-박민재가 당신에게 수화기를 밀어놓고 묻습니다.
+단말기에는 해당 세대 구성원 2명, 미성년자 없음이라고 뜹니다.
+그런데 민원 시스템은 방금 같은 주소로 소아과 예약 알림 하나를 띄웁니다.
 
-"바로 전화할래?
-아니면 기록부터 맞춰보고, 사람이 거짓말하는 건지 시스템이 빠뜨린 건지 보겠어?"
+박민재가 수화기를 조금 더 가까이 밀며 낮게 묻습니다.
+
+"너라면 어디부터 의심할래.
+신고자, 기록, 아니면 저 목소리?"
 
 [State]
 Disclosure Level: PUBLIC
@@ -1541,90 +2378,86 @@ Boundary Stability: 안정
 Visible Classification: 주민 신고 / 확인 필요
 
 [Choices]
-1. "비슷한 신고가 있었나요?" 박민재에게 먼저 묻는다.
-2. "제가 바로 전화해볼게요." 신고자에게 연락한다.
-3. "기록부터 맞춰보죠." 옆집 주소의 거주 기록을 조회한다.
-4. "혼자 가긴 찜찜합니다." 현장 동행 요청을 넣는다.`,
+1. "방금 목소리, 녹음 남겼나요?" 박민재에게 먼저 묻는다.
+2. "신고자랑 직접 통화해볼게요." 수화기를 받는다.
+3. "소아과 예약 기록부터 볼게요." 같은 주소의 생활구 기록을 대조한다.
+4. "현장 가려면 둘이 가죠." 동행 경비를 요청한다.`,
   },
   "KR-INIT-001 잔여 문서 기록 관리자": {
     narrative: `[Scene]
 제3기록보존실의 조명은 늘 한 박자 늦게 깜박입니다.
-당신은 오늘 폐기 예정 문서 색인을 검수하는 기록 관리자로 배정되어 있습니다.
+오연주는 폐기 완료 도장이 찍힌 봉투 앞에서 손을 멈춥니다.
 
-감독관 오연주가 출입 카드 리더기를 다시 확인하더니, 화면을 당신 쪽으로 돌립니다.
+"네 이름이 승인란에 있어.
+그런데 너, 오늘 여기 처음 들어왔잖아."
 
-"네 계정으로 복원 요청이 하나 올라왔어.
-방금 자리 배정받은 사람이 누를 수 있는 메뉴가 아닌데."
+그녀가 작업 단말기를 당신 쪽으로 돌립니다.
+삭제된 문서 하나가 내부 검색망에 다시 떠 있습니다.
 
-작업 단말기에는 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타나 있습니다.
-
-KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
+KR-INIT-001 / 복원 상태: 부분 성공 / 요청자: 당신 / 요청 시각: 출근 전
 
 문서 제목 아래에는 제목이 아닌 문장이 적혀 있습니다.
 
 "첫 대응은 실패하지 않았다. 성공했기 때문에 묻혔다."
 
-오연주가 모니터를 끄지 않은 채 당신을 봅니다.
+오연주가 모니터 밝기를 낮추며 묻습니다.
 
-"이거 열면 네 계정에 흔적이 남아.
-그래도 직접 볼 거야, 아니면 내가 먼저 권한 쪽을 건드려볼까?"
+"열면 네 계정에 흔적이 남아.
+그래도 직접 볼래, 아니면 누가 네 이름을 썼는지부터 볼래?"
 
 [State]
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정`,
     choices: [
-      { text: "\"권한부터 부탁드립니다.\" 오연주에게 요청자 확인을 열어달라고 한다." },
-      { text: "\"흔적 남아도 복원 로그를 먼저 볼게요.\" 로그를 연다." },
-      { text: "\"등급이 왜 틀렸는지부터 보죠.\" 열람 등급 사유를 조회한다." },
-      { text: "말없이 화면을 캡처하고 접속을 끊을 준비를 한다." },
+      { text: "\"누가 제 이름을 썼는지부터요.\" 오연주에게 요청자 경로를 열어달라고 한다." },
+      { text: "\"흔적 남아도 제가 열게요.\" KR-INIT-001 복원 로그를 확인한다." },
+      { text: "\"문서보다 승인란이 먼저입니다.\" 승인 시각과 출입 기록을 대조한다." },
+      { text: "말없이 화면을 캡처하고, 오연주가 말하지 않는 표정을 살핀다." },
     ],
-    allow_freeform: true,
+    allow_freeform: false,
     raw: `[Scene]
 제3기록보존실의 조명은 늘 한 박자 늦게 깜박입니다.
-당신은 오늘 폐기 예정 문서 색인을 검수하는 기록 관리자로 배정되어 있습니다.
+오연주는 폐기 완료 도장이 찍힌 봉투 앞에서 손을 멈춥니다.
 
-감독관 오연주가 출입 카드 리더기를 다시 확인하더니, 화면을 당신 쪽으로 돌립니다.
+"네 이름이 승인란에 있어.
+그런데 너, 오늘 여기 처음 들어왔잖아."
 
-"네 계정으로 복원 요청이 하나 올라왔어.
-방금 자리 배정받은 사람이 누를 수 있는 메뉴가 아닌데."
+그녀가 작업 단말기를 당신 쪽으로 돌립니다.
+삭제된 문서 하나가 내부 검색망에 다시 떠 있습니다.
 
-작업 단말기에는 존재하면 안 되는 항목 하나가 내부 검색망에 다시 나타나 있습니다.
-
-KR-INIT-001 / 복원 상태: 부분 성공 / 열람 등급: 불일치
+KR-INIT-001 / 복원 상태: 부분 성공 / 요청자: 당신 / 요청 시각: 출근 전
 
 문서 제목 아래에는 제목이 아닌 문장이 적혀 있습니다.
 
 "첫 대응은 실패하지 않았다. 성공했기 때문에 묻혔다."
 
-오연주가 모니터를 끄지 않은 채 당신을 봅니다.
+오연주가 모니터 밝기를 낮추며 묻습니다.
 
-"이거 열면 네 계정에 흔적이 남아.
-그래도 직접 볼 거야, 아니면 내가 먼저 권한 쪽을 건드려볼까?"
+"열면 네 계정에 흔적이 남아.
+그래도 직접 볼래, 아니면 누가 네 이름을 썼는지부터 볼래?"
 
 [State]
 Disclosure Level: PUBLIC -> RESTRICTED
 Boundary Stability: 안정
 
 [Choices]
-1. "권한부터 부탁드립니다." 오연주에게 요청자 확인을 열어달라고 한다.
-2. "흔적 남아도 복원 로그를 먼저 볼게요." 로그를 연다.
-3. "등급이 왜 틀렸는지부터 보죠." 열람 등급 사유를 조회한다.
-4. 말없이 화면을 캡처하고 접속을 끊을 준비를 한다.`,
+1. "누가 제 이름을 썼는지부터요." 오연주에게 요청자 경로를 열어달라고 한다.
+2. "흔적 남아도 제가 열게요." KR-INIT-001 복원 로그를 확인한다.
+3. "문서보다 승인란이 먼저입니다." 승인 시각과 출입 기록을 대조한다.
+4. 말없이 화면을 캡처하고, 오연주가 말하지 않는 표정을 살핀다.`,
   },
   "남극 거대공동 현장 파견 계약 분석관": {
     narrative: `[Scene]
 극지 현장 파견 대기실에는 창문이 없습니다.
-당신은 남극 거대공동 조사 현장으로 배정된 계약 분석관입니다. 공개 임무는 계약서의 위험 조항과 실제 진입 좌표가 맞는지 확인하는 일입니다.
-
-내부 코드명과 원인 항목은 검은 칸으로 가려져 있습니다.
+벽면 스크린에는 남극 거대공동 조사 지점의 진입 경로가 떠 있지만, 오른쪽 아래 축척이 몇 초마다 조금씩 바뀝니다.
 
 현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
 
 "네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
 문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
 
-벽면 스크린에는 남극 조사 지점의 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
-강사는 아무렇지 않게 말합니다.
+계약서 위험 조항 일부는 검은 칸으로 가려져 있습니다.
+강사는 아무렇지 않은 목소리로 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
 
@@ -1634,33 +2467,31 @@ Boundary Stability: 안정
 
 강사가 당신 쪽으로 고개를 돌립니다.
 
-"어때요. 방금 말한 원칙, 무슨 뜻인지 이해했습니까?
-모르겠으면 지금 물어보는 게 낫습니다. 현장에서는 질문할 시간이 없을 수도 있으니까."
+"어때요.
+지도를 믿지 말라는 말이 이상하게 들립니까, 아니면 저 손글씨가 더 이상합니까?"
 
 [State]
 Disclosure Level: RESTRICTED
 Boundary Stability: 흔들림
 Visible Classification: 남극 거대공동 조사 / 확인 전`,
     choices: [
-      { text: "\"무슨 뜻인지 정확히 듣고 싶습니다.\" 강사에게 되묻는다." },
-      { text: "\"경로부터 확인하겠습니다.\" 임태오에게 변경 로그를 요청한다." },
-      { text: "\"이전 좌표가 남아 있나요?\" 진입 경로의 이전 버전을 조회한다." },
-      { text: "말없이 현재 좌표를 사진으로 남기고 두 사람의 반응을 살핀다." },
+      { text: "\"지도를 믿지 말라는 뜻부터 듣고 싶습니다.\" 강사에게 되묻는다." },
+      { text: "\"승인자 없는 변경 로그부터 보죠.\" 임태오에게 기록을 요청한다." },
+      { text: "\"이전 좌표가 아직 남아 있나요?\" 진입 경로의 이전 버전을 조회한다." },
+      { text: "말없이 손글씨를 사진으로 남기고, 두 사람의 반응을 살핀다." },
     ],
-    allow_freeform: true,
+    allow_freeform: false,
     raw: `[Scene]
 극지 현장 파견 대기실에는 창문이 없습니다.
-당신은 남극 거대공동 조사 현장으로 배정된 계약 분석관입니다. 공개 임무는 계약서의 위험 조항과 실제 진입 좌표가 맞는지 확인하는 일입니다.
-
-내부 코드명과 원인 항목은 검은 칸으로 가려져 있습니다.
+벽면 스크린에는 남극 거대공동 조사 지점의 진입 경로가 떠 있지만, 오른쪽 아래 축척이 몇 초마다 조금씩 바뀝니다.
 
 현장 지원 오퍼레이터 임태오가 지도 단말기를 건네며 낮게 말합니다.
 
 "네 장비는 정상인데, 네 경로만 어제부터 세 번 바뀌었어.
 문제는 변경 승인자가 없어. 승인란이 그냥 비어 있어."
 
-벽면 스크린에는 남극 조사 지점의 진입 경로가 표시되어 있지만, 지도 오른쪽 아래의 축척이 계속 바뀝니다.
-강사는 아무렇지 않게 말합니다.
+계약서 위험 조항 일부는 검은 칸으로 가려져 있습니다.
+강사는 아무렇지 않은 목소리로 말합니다.
 
 "현장에서 길이 다르면, 지도보다 길을 믿지 마십시오."
 
@@ -1670,8 +2501,8 @@ Visible Classification: 남극 거대공동 조사 / 확인 전`,
 
 강사가 당신 쪽으로 고개를 돌립니다.
 
-"어때요. 방금 말한 원칙, 무슨 뜻인지 이해했습니까?
-모르겠으면 지금 물어보는 게 낫습니다. 현장에서는 질문할 시간이 없을 수도 있으니까."
+"어때요.
+지도를 믿지 말라는 말이 이상하게 들립니까, 아니면 저 손글씨가 더 이상합니까?"
 
 [State]
 Disclosure Level: RESTRICTED
@@ -1679,10 +2510,10 @@ Boundary Stability: 흔들림
 Visible Classification: 남극 거대공동 조사 / 확인 전
 
 [Choices]
-1. "무슨 뜻인지 정확히 듣고 싶습니다." 강사에게 되묻는다.
-2. "경로부터 확인하겠습니다." 임태오에게 변경 로그를 요청한다.
-3. "이전 좌표가 남아 있나요?" 진입 경로의 이전 버전을 조회한다.
-4. 말없이 현재 좌표를 사진으로 남기고 두 사람의 반응을 살핀다.`,
+1. "지도를 믿지 말라는 뜻부터 듣고 싶습니다." 강사에게 되묻는다.
+2. "승인자 없는 변경 로그부터 보죠." 임태오에게 기록을 요청한다.
+3. "이전 좌표가 아직 남아 있나요?" 진입 경로의 이전 버전을 조회한다.
+4. 말없이 손글씨를 사진으로 남기고, 두 사람의 반응을 살핀다.`,
   },
   "소바리 주변부 실종 조사팀 현지 협력자": {
     narrative: `[Scene]
@@ -1715,7 +2546,7 @@ Boundary Stability: 안정`,
       { text: "\"그 사람들이 정말 출발했는지부터 보죠.\" 출발 기록을 확인한다." },
       { text: "말없이 무전 원본을 복사하고, 재생 시간을 다시 본다." },
     ],
-    allow_freeform: true,
+    allow_freeform: false,
     raw: `[Scene]
 소바리 외곽의 작은 무전소.
 낮인데도 산 능선 위에는 별처럼 보이는 빛이 세 개 떠 있습니다.
@@ -1767,6 +2598,7 @@ export async function POST(req: Request) {
     memory?: string;
     difficulty?: DifficultyMode;
     modelProfile?: ModelProfile;
+    playerAccount?: PlayerAccountContext;
     language?: ResponseLanguage;
     maxOutputTokens?: number;
     continueFrom?: {
@@ -1784,11 +2616,13 @@ export async function POST(req: Request) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "메시지가 비어 있습니다" }, { status: 400 });
   }
+  const requestMessages = trimMessagesForBudget(messages);
   const memo = typeof body.memo === "string" ? body.memo.trim().slice(0, 300) : "";
   const memory = typeof body.memory === "string" ? body.memory.trim().slice(0, 4000) : "";
   const difficulty = normalizeDifficulty(body.difficulty);
   const modelProfile = normalizeModelProfile(body.modelProfile);
   const language = normalizeLanguage(body.language);
+  const playerAccount = normalizePlayerAccountContext(body.playerAccount);
   const selectedModel = selectModel(modelProfile);
   const maxOutputTokens = normalizeOutputTokens(body.maxOutputTokens);
   const continueFrom = body.continueFrom && typeof body.continueFrom === "object"
@@ -1797,8 +2631,9 @@ export async function POST(req: Request) {
         raw: typeof body.continueFrom.raw === "string" ? body.continueFrom.raw.slice(0, 12000) : "",
       }
     : null;
+  const contextMessages = continueFrom ? messagesBeforeLastAssistant(requestMessages) : requestMessages;
 
-  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const lastUser = [...requestMessages].reverse().find((m) => m.role === "user");
   const selectedRoute = lastUser && isStarterRouteCommand(lastUser.content)
     ? detectStarterRoute(lastUser.content)
     : null;
@@ -1815,35 +2650,45 @@ export async function POST(req: Request) {
           { text: language === "en" ? "\"Hold on. I need to read the room first.\" Look around." : "\"잠깐만요. 주변부터 다시 볼게요.\" 지금 보이는 단서를 살핀다." },
           { text: language === "en" ? "\"Give me one second to line this up.\" Review the current situation." : "\"한 번만 정리하고 움직일게요.\" 현재 상황을 다시 맞춰본다." },
         ],
-        allow_freeform: true,
+        allow_freeform: false,
         raw: reason,
       });
     }
   }
 
-  if (!continueFrom && language === "ko" && selectedRoute && messages.length <= 3) {
+  if (!continueFrom && language === "ko" && selectedRoute && requestMessages.length <= 3) {
     const opening = STARTER_ROUTE_OPENINGS[selectedRoute];
-    if (opening) return NextResponse.json(withSessionPrelude(withBriefing(opening, messages, language), language, selectedRoute));
+    if (opening) return NextResponse.json(withSessionPrelude(withBriefing(opening, requestMessages, language), language, selectedRoute));
   }
 
-  if (!continueFrom && language === "ko" && !selectedRoute && messages.length === 1 && lastUser) {
-    return NextResponse.json(withSessionPrelude(buildCustomCharacterOpening(lastUser.content), language, lastUser.content));
+  if (!continueFrom && !selectedRoute && requestMessages.length === 1 && lastUser) {
+    const blockedCanon = detectCanonStartBlock(lastUser.content);
+    if (blockedCanon) {
+      return NextResponse.json(withSessionPrelude(
+        withBriefing(buildCanonStartBlockedResponse(blockedCanon, language), requestMessages, language),
+        language,
+        lastUser.content,
+      ));
+    }
+  }
+
+  if (!continueFrom && language === "ko" && !selectedRoute && requestMessages.length === 1 && lastUser) {
+    return NextResponse.json(withSessionPrelude(
+      buildCustomCharacterOpening(lastUser.content, playerAccount?.displayName),
+      language,
+      lastUser.content,
+    ));
   }
 
   try {
-    if (!client) {
+    if (!selectedModel.configured) {
       return NextResponse.json(
-        {
-          error:
-            language === "en"
-              ? "OPENAI_API_KEY must be set in .env.local. The legacy ANTHROPIC_API_KEY name is read temporarily, but no key is available."
-              : ".env.local에 OPENAI_API_KEY를 설정해야 합니다. 임시로 기존 ANTHROPIC_API_KEY 이름도 읽지만, 키가 비어 있습니다.",
-        },
+        { error: modelConfigurationMessage(selectedModel, language) },
         { status: 500 },
       );
     }
 
-    if (apiKey?.startsWith("sk-ant-")) {
+    if (selectedModel.provider === "openai" && openAiApiKey?.startsWith("sk-ant-")) {
       return NextResponse.json(
         {
           error:
@@ -1877,6 +2722,16 @@ Use it naturally when relevant, and let the player notice when a current event c
 
 ${memory}`
       : "";
+    const accountInstructions = playerAccount
+      ? `
+
+---
+
+Player Account Context:
+- Account display name: ${playerAccount.displayName}
+- If the player did not set a character name, use the account display name as the protagonist name.
+- Do not mention login, account systems, or admin status inside the fiction unless the player asks about app settings.`
+      : "";
     const difficultyInstructions = `
 
 ---
@@ -1887,8 +2742,8 @@ ${DIFFICULTY_INSTRUCTIONS[difficulty]}`;
 ---
 
 ${LANGUAGE_INSTRUCTIONS[language]}`;
-    const sessionAnchor = buildSessionAnchor(messages, language);
-    const routePlaybook = buildRoutePlaybook(messages, language);
+    const sessionAnchor = buildCleanSessionAnchor(contextMessages, language);
+    const routePlaybook = buildCleanRoutePlaybook(contextMessages, language);
     const continuityInstructions = sessionAnchor
       ? `
 
@@ -1899,6 +2754,14 @@ ${OPENING_FLOW_RULE}
 ---
 
 ${CONVERSATIONAL_PLAY_RULE}
+
+---
+
+${SCENE_READABILITY_RULE}
+
+---
+
+${CURIOSITY_LOOP_RULE}
 
 ---
 
@@ -1921,13 +2784,51 @@ ${CONVERSATIONAL_PLAY_RULE}
 
 ---
 
+${SCENE_READABILITY_RULE}
+
+---
+
+${CURIOSITY_LOOP_RULE}
+
+---
+
 ${routePlaybook}
 
 ---
 
 ${SESSION_CONTINUITY_RULE}`;
-    const contextInstructions = `${languageInstructions}${difficultyInstructions}${continuityInstructions}${memoInstructions}${memoryInstructions}`;
+    const worldIndexContext = buildWorldIndexContext({
+      messages: contextMessages,
+      memo,
+      memory,
+      language,
+    });
+    const worldIndexInstructions = worldIndexContext
+      ? `
+
+---
+
+${worldIndexContext}`
+      : "";
+    const gameEngineContext = buildGameEngineInstructions(
+      buildGameEngineStateFromMessages(contextMessages, language),
+      language,
+    );
+    const gameEngineInstructions = `
+
+---
+
+${gameEngineContext}`;
+    const contextInstructions = `${languageInstructions}${difficultyInstructions}${continuityInstructions}${accountInstructions}${memoInstructions}${memoryInstructions}${worldIndexInstructions}${gameEngineInstructions}`;
     const baseInstructions = `${INSTRUCTIONS}
+
+---
+
+${WORLD_DETAIL_RULE}
+
+---
+
+${EARNED_DISCLOSURE_RULE}
 
 ---
 
@@ -1947,33 +2848,38 @@ ${language === "en" ? 'Assume the player character is an adult and address them 
 End with [Choices] as the final section.${contextInstructions}`
       : `${baseInstructions}${contextInstructions}`;
 
+    const continuationBridge = continueFrom ? buildContinuationBridge(continueFrom.raw || continueFrom.narrative) : "";
     const continuationInstruction = continueFrom
       ? language === "en"
         ? `The previous assistant response was cut off by the output limit. Continue it in a readable way.
 
-Previous cut response:
-${continueFrom.raw || continueFrom.narrative}
+Reading bridge from the end of the cut response:
+${continuationBridge || "(no stable bridge available)"}
 
 Rules:
 - Return only the repaired continuation segment, not a full restart.
+- The cut assistant turn was removed from model conversation history; use the bridge above only as a reading handoff.
 - Begin from the last incomplete sentence or the previous full sentence if needed, so the reader does not see a dangling suffix.
 - Do not start with a fragment such as only the remaining syllables of a cut word.
+- It is okay to repeat the last incomplete line from the bridge before continuing.
 - Preserve the same scene, NPCs, clues, and tone.
 - If [Choices] were missing or cut, include complete [Choices] at the end.`
         : `이전 AI-GM 응답이 출력 제한으로 중간에 잘렸습니다. 읽기 좋게 이어서 생성하세요.
 
-잘린 이전 응답:
-${continueFrom.raw || continueFrom.narrative}
+잘린 응답 끝부분 읽기 연결부:
+${continuationBridge || "(안정적인 연결부 없음)"}
 
 규칙:
 - 전체 장면을 처음부터 다시 시작하지 말고, 읽기 좋은 이어쓰기 구간만 반환합니다.
+- 잘린 assistant 메시지는 대화 기록에서 제거되어 있습니다. 위 연결부는 독자가 어디서 이어 읽는지 알려주는 용도로만 사용합니다.
 - 마지막 미완성 문장 또는 필요하면 그 직전 완성 문장부터 다시 시작해 문맥이 자연스럽게 이어지게 합니다.
 - 잘린 글자의 나머지 조각만, 예를 들어 "우하사..."처럼 시작하지 않습니다.
+- 필요하면 연결부의 마지막 미완성 줄을 한 번 자연스럽게 되풀이한 뒤 이어갑니다.
 - 같은 장면, 인물, 단서, 말투를 유지합니다.
 - [Choices]가 없거나 잘렸다면 마지막에 완성된 [Choices]를 포함합니다.`
       : "";
 
-    const responseInput = messages.map((message) => ({
+    const responseInput: ModelInputMessage[] = contextMessages.map((message) => ({
       role: message.role,
       content: message.content,
     }));
@@ -1983,42 +2889,61 @@ ${continueFrom.raw || continueFrom.narrative}
         content: continuationInstruction,
       });
     }
-    const responseOptions = {
-      model: selectedModel,
-      instructions: continueFrom
-        ? `${responseInstructions}
+    const responseInstructionsForRequest = continueFrom
+      ? `${responseInstructions}
 
 ---
 
 Continuation Mode:
-The next answer is a readable continuation of a truncated assistant response. It should be useful as a separate message placed below the cut text.`
-        : responseInstructions,
-      max_output_tokens: continueFrom
-        ? Math.min(MAX_OUTPUT_TOKENS, Math.max(1600, maxOutputTokens + 800))
-        : maxOutputTokens,
-      input: responseInput,
-      ...(supportsReasoningConfig(selectedModel)
-        ? { reasoning: { effort: "low" as const } }
-        : {}),
-    };
+The next answer is a readable continuation of a truncated assistant response. It should be useful as a separate message placed below the cut text. Start cleanly from a readable sentence or line, not from leftover syllables.`
+      : responseInstructions;
+    const effectiveMaxOutputTokens = continueFrom
+      ? Math.min(SERVER_MAX_OUTPUT_TOKENS, Math.max(1600, maxOutputTokens + 800))
+      : maxOutputTokens;
+    const estimatedInputTokens = estimateInputTokens(responseInstructionsForRequest, responseInput);
+    const usageGuard = await guardApiUsage({
+      estimatedInputTokens,
+      requestedOutputTokens: effectiveMaxOutputTokens,
+      model: selectedModel.usageLabel,
+      language,
+    });
+    if (!usageGuard.allowed) return usageGuard.response;
 
-    let response = await client.responses.create(responseOptions);
-    let text = extractOpenAIText(response);
-    if (!text && maxOutputTokens < MAX_OUTPUT_TOKENS) {
-      const retryOutputTokens = Math.min(MAX_OUTPUT_TOKENS, Math.max(1600, maxOutputTokens + 800));
-      response = await client.responses.create({
-        ...responseOptions,
-        max_output_tokens: retryOutputTokens,
+    let generated = await createModelResponse({
+      selectedModel,
+      instructions: responseInstructionsForRequest,
+      input: responseInput,
+      maxOutputTokens: effectiveMaxOutputTokens,
+      language,
+    });
+    const usageResponses: unknown[] = [generated.response];
+    let text = generated.text;
+    if (!text && effectiveMaxOutputTokens < SERVER_MAX_OUTPUT_TOKENS) {
+      const retryOutputTokens = Math.min(SERVER_MAX_OUTPUT_TOKENS, Math.max(1600, effectiveMaxOutputTokens + 800));
+      generated = await createModelResponse({
+        selectedModel,
+        instructions: responseInstructionsForRequest,
+        input: responseInput,
+        maxOutputTokens: retryOutputTokens,
+        language,
       });
-      text = extractOpenAIText(response);
+      usageResponses.push(generated.response);
+      text = generated.text;
     }
     if (!text) {
-      throw new Error(getEmptyResponseMessage(response, language));
+      throw new Error(getEmptyResponseMessage(generated.response, language, generated.providerName));
     }
 
     const parsed = parseGameResponse(text);
-    const gameResponse = withBriefing(parsed, messages, language);
-    gameResponse.truncated = isOpenAIOutputTruncated(response);
+    const gameResponse = withBriefing(parsed, contextMessages, language);
+    gameResponse.truncated = generated.truncated;
+    gameResponse.usage = await recordApiUsageSuccess({
+      requestCount: usageResponses.length,
+      estimatedInputTokens,
+      requestedOutputTokens: effectiveMaxOutputTokens,
+      model: selectedModel.usageLabel,
+      responses: usageResponses,
+    });
     if (continueFrom) {
       gameResponse.continuation = true;
       gameResponse.continuation_of = (continueFrom.narrative || continueFrom.raw).slice(0, 160);

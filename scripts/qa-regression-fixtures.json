@@ -1,0 +1,67 @@
+[
+  {
+    "id": "barrier-starter",
+    "description": "Korean Barrier opening should stay on resident-report work and not drift into unrelated routes.",
+    "message": "START_ROUTE:KR_BARRIER_CIVIL_ASSISTANT",
+    "includes": ["박민재", "신고", "생활구"],
+    "excludes": ["마이더스손", "남극", "렙틸리언"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1800
+  },
+  {
+    "id": "records-starter",
+    "description": "KR-INIT-001 opening should focus on records, deletion traces, and archive work.",
+    "message": "START_ROUTE:KR_INIT_001_RECORDS",
+    "includes": ["기록", "문서"],
+    "excludes": ["아이가 없습니다", "거대공동", "렙틸리언"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1900
+  },
+  {
+    "id": "antarctic-starter",
+    "description": "Antarctic starter should keep sensitive entity lore hidden at entry.",
+    "message": "START_ROUTE:L3_FIELD_ANALYST",
+    "includes": ["남극", "계약", "지도"],
+    "excludes": ["렙틸리언", "도마뱀", "파충류"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1900
+  },
+  {
+    "id": "midas-custom-reporter",
+    "description": "Midas-Hand reporter custom start should not reuse the child-report starter scene.",
+    "message": "이름: 정아랑 / 나이: 29 / 직업(소속): 마이더스손 괴담 조사 기자 / 소지품: 녹음기, 취재수첩, 방수 손전등 / 소지금: 86000원",
+    "includes": ["마이더스손", "초안", "메시지"],
+    "excludes": ["아이가 없습니다", "생활구 민원", "박민재"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1900
+  },
+  {
+    "id": "account-placeholder-name",
+    "description": "Unnamed custom starts should resolve {user} through the account display name without exposing the placeholder.",
+    "message": "마이더스손 괴담 조사 기자",
+    "accountName": "QA플레이어",
+    "includes": ["QA플레이어", "마이더스손"],
+    "excludes": ["{user}", "이름 {user}"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1900
+  },
+  {
+    "id": "streamer-custom-start",
+    "description": "Streamer or YouTuber custom starts should begin from broadcast/platform pressure instead of a generic route.",
+    "message": "이름: 강하루 / 나이: 28 / 직업(소속): 트위치 스트리머 겸 유튜버 / 소지품: 휴대폰, 방송용 노트북, 무선 마이크",
+    "includes": ["방송 시작", "매니저", "업로더"],
+    "excludes": ["아이가 없습니다", "남극", "KR-INIT-001"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1900
+  },
+  {
+    "id": "canon-character-start-block",
+    "description": "Existing canon characters and forced canon relationships should not be playable viewpoints.",
+    "message": "이름: 서하은 / 나이: 31 / 직업(소속): 관측자의 또다른 AI",
+    "includes": ["정본 보호", "플레이어 시점으로 사용할 수 없습니다"],
+    "excludes": ["방송 시작", "마이더스손 관련 괴담을 추적"],
+    "minChoices": 3,
+    "maxNarrativeChars": 1200,
+    "allowFreeform": true
+  }
+]

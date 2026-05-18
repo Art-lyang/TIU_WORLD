@@ -38,6 +38,82 @@ export type GameBriefing = {
   logs: string[];
 };
 
+export type DisclosureLevel = "PUBLIC" | "RESTRICTED" | "OBSERVER" | "PRIVATE";
+
+export type CasePhase = "intake" | "evidence" | "verification" | "reveal" | "aftermath";
+
+export type ClueStatus = "unseen" | "noticed" | "collected" | "verified" | "contradicted";
+
+export type NpcRelation = "unknown" | "neutral" | "helpful" | "wary" | "hostile";
+
+export type CaseState = {
+  id: string;
+  title: string;
+  route: string;
+  phase: CasePhase;
+  turn: number;
+  publicObjective: string;
+  activeQuestion: string;
+  pressure: string;
+  disclosureLevel: DisclosureLevel;
+  risk: number;
+};
+
+export type ClueRecord = {
+  id: string;
+  title: string;
+  detail: string;
+  status: ClueStatus;
+  source: string;
+  unlocks?: DisclosureLevel;
+};
+
+export type NpcRecord = {
+  id: string;
+  name: string;
+  role: string;
+  emotion: string;
+  relation: NpcRelation;
+  trust: number;
+  known: string;
+  lastSeen: string;
+};
+
+export type DisclosureGate = {
+  id: string;
+  label: string;
+  level: DisclosureLevel;
+  status: "locked" | "hypothesis" | "unlocked";
+  requiredClues: string[];
+  hint: string;
+};
+
+export type GameEngineState = {
+  caseState: CaseState;
+  clues: ClueRecord[];
+  npcs: NpcRecord[];
+  disclosureGates: DisclosureGate[];
+};
+
+export type ApiUsageSnapshot = {
+  date: string;
+  calls: number;
+  blocked: number;
+  dailyCallLimit: number;
+  dailyTokenLimit: number;
+  estimatedTokens: number;
+  actualTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  maxOutputTokens: number;
+  minSecondsBetweenCalls: number;
+  lastRequestAt?: string;
+  nextAllowedAt?: string;
+  lastModel?: string;
+  status: "ok" | "cooldown" | "call_limit" | "token_limit";
+  message?: string;
+};
+
 export type GameResponse = {
   narrative: string;
   choices: Choice[];
@@ -48,4 +124,6 @@ export type GameResponse = {
   truncated?: boolean;
   continuation?: boolean;
   continuation_of?: string;
+  usage?: ApiUsageSnapshot;
+  engine?: GameEngineState;
 };

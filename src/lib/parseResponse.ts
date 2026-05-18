@@ -51,7 +51,7 @@ export function parseGameResponse(text: string): GameResponse {
     return {
       narrative: stripMemorySection(raw),
       choices: FALLBACK_CHOICES,
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
       memory_updates,
     };
@@ -73,7 +73,7 @@ export function parseGameResponse(text: string): GameResponse {
     return {
       narrative: stripMemorySection(raw),
       choices: FALLBACK_CHOICES,
-      allow_freeform: true,
+      allow_freeform: false,
       raw,
       memory_updates,
     };
@@ -82,7 +82,7 @@ export function parseGameResponse(text: string): GameResponse {
   return {
     narrative: narrative || stripMemorySection(raw),
     choices: choices.slice(0, 6),
-    allow_freeform: true,
+    allow_freeform: false,
     raw,
     memory_updates,
   };

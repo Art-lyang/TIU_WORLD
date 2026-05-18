@@ -1,0 +1,1524 @@
+﻿{
+    "items":  [
+                  {
+                      "file":  "antarctic-gate.webp",
+                      "title":  "ANTARCTIC HOLLOW GATE",
+                      "detail":  "남극 거대공동 / 극지 파견 / 지도 오류",
+                      "keywords":  [
+                                       "남극 거대공동",
+                                       "남극",
+                                       "극지",
+                                       "공동",
+                                       "빙하",
+                                       "크레바스",
+                                       "Antarctic",
+                                       "Antarctic Hollow",
+                                       "Antarctic Gate",
+                                       "field dispatch",
+                                       "계약 분석관",
+                                       "현장 파견",
+                                       "지도 오류",
+                                       "축척",
+                                       "진입 좌표",
+                                       "L3"
+                                   ],
+                      "priority":  330
+                  },
+                  {
+                      "file":  "ashfall-city.webp",
+                      "title":  "ASHFALL CITY",
+                      "detail":  "Ashfall 도시 붕괴 / 생체 구조물 / 봉쇄 실패",
+                      "keywords":  [
+                                       "Ashfall",
+                                       "Ashfall City",
+                                       "애쉬폴",
+                                       "애쉬폴 시티",
+                                       "Camden",
+                                       "생체 건물",
+                                       "생체 구조물",
+                                       "도시 기능 붕괴",
+                                       "biomass",
+                                       "failed hive",
+                                       "봉쇄구역",
+                                       "도시 붕괴",
+                                       "Z-3",
+                                       "폐허"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "ashfall-interior.webp",
+                      "title":  "ASHFALL INTERIOR",
+                      "detail":  "Ashfall 내부 / 감염 복도 / Brood 활동",
+                      "keywords":  [
+                                       "Ashfall interior",
+                                       "애쉬폴 내부",
+                                       "감염 복도",
+                                       "생체 복도",
+                                       "brood drone",
+                                       "브루드 드론",
+                                       "부화",
+                                       "격리 복도",
+                                       "SHED ORDER",
+                                       "EV-Σ",
+                                       "EV-Sigma",
+                                       "감염 내부",
+                                       "실내 봉쇄"
+                                   ],
+                      "priority":  230
+                  },
+                  {
+                      "file":  "Blooming Cradle.png",
+                      "title":  "BLOOMING CRADLE",
+                      "detail":  "개화 둥지 / 포자 성장 / 생체 배양 흔적",
+                      "keywords":  [
+                                       "Blooming Cradle",
+                                       "개화 둥지",
+                                       "개화",
+                                       "둥지",
+                                       "포자 성장",
+                                       "생체 배양",
+                                       "배양조",
+                                       "증식",
+                                       "EV-Σ",
+                                       "감염 배양",
+                                       "cradle",
+                                       "spore bloom"
+                                   ],
+                      "priority":  220
+                  },
+                  {
+                      "file":  "brood-drone-closeup.webp",
+                      "title":  "BROOD DRONE CLOSEUP",
+                      "detail":  "Brood Drone 근접 관측 / 감염 개체",
+                      "keywords":  [
+                                       "brood drone",
+                                       "Brood Drone",
+                                       "브루드 드론",
+                                       "브루드",
+                                       "드론 발달",
+                                       "감염 개체",
+                                       "근접 관측",
+                                       "hostile",
+                                       "생체기계",
+                                       "bio-mechanical",
+                                       "TS-Ω",
+                                       "TS-Omega"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "dprk-cctv-01.webp",
+                      "title":  "DPRK CCTV CAM 01",
+                      "detail":  "DPRK CCTV / 오라클 노드 / 미확인 거리",
+                      "keywords":  [
+                                       "DPRK",
+                                       "북한",
+                                       "UNKNOWN AREA",
+                                       "미확인 구역",
+                                       "오라클 노드",
+                                       "ORACLE NODE",
+                                       "CCTV",
+                                       "CAM 01",
+                                       "감시",
+                                       "피드 불안정",
+                                       "feed unstable",
+                                       "거리 감시",
+                                       "정체진화"
+                                   ],
+                      "priority":  210
+                  },
+                  {
+                      "file":  "dprk-cctv-02.webp",
+                      "title":  "DPRK CCTV CAM 02",
+                      "detail":  "DPRK 감시 피드 / 정체된 거리 / 오라클 노드",
+                      "keywords":  [
+                                       "DPRK",
+                                       "북한",
+                                       "오라클 노드",
+                                       "ORACLE NODE-04",
+                                       "CAM 02",
+                                       "CCTV",
+                                       "미확인 인물",
+                                       "거리",
+                                       "감시 카메라",
+                                       "record",
+                                       "feed unstable",
+                                       "Node-04"
+                                   ],
+                      "priority":  210
+                  },
+                  {
+                      "file":  "dprk-cctv-03.webp",
+                      "title":  "ORACLE NODE-04 RECORDS",
+                      "detail":  "KR-INIT-001 / 잔여 문서 / 불안정한 기록 피드",
+                      "keywords":  [
+                                       "KR-INIT-001",
+                                       "KR INIT 001",
+                                       "KR-INIT",
+                                       "잔여 문서",
+                                       "기록 관리자",
+                                       "기록보존실",
+                                       "복원 로그",
+                                       "폐기 문서",
+                                       "열람 등급",
+                                       "색인",
+                                       "오라클 노드",
+                                       "ORACLE NODE-04",
+                                       "Node-04",
+                                       "DPRK",
+                                       "북한",
+                                       "기록 오류",
+                                       "문서 제목",
+                                       "삭제 승인"
+                                   ],
+                      "priority":  340
+                  },
+                  {
+                      "file":  "dprk-cctv-04.webp",
+                      "title":  "DPRK CCTV CAM 04",
+                      "detail":  "오라클 노드 / 기록 불일치 / 거리 관측",
+                      "keywords":  [
+                                       "DPRK",
+                                       "북한",
+                                       "ORACLE NODE",
+                                       "오라클 노드",
+                                       "CAM 04",
+                                       "기록 불일치",
+                                       "감시 피드",
+                                       "CCTV",
+                                       "미확인 거리",
+                                       "문서 오염",
+                                       "record mismatch"
+                                   ],
+                      "priority":  205
+                  },
+                  {
+                      "file":  "Dust Bloom.png",
+                      "title":  "DUST BLOOM",
+                      "detail":  "먼지 개화 / 포자 구름 / 저시야 감염 현상",
+                      "keywords":  [
+                                       "Dust Bloom",
+                                       "먼지 개화",
+                                       "분진",
+                                       "포자 구름",
+                                       "포자",
+                                       "spore cloud",
+                                       "spore",
+                                       "저시야",
+                                       "감염 안개",
+                                       "가루",
+                                       "대기 포자",
+                                       "EV-Σ"
+                                   ],
+                      "priority":  210
+                  },
+                  {
+                      "file":  "infection-transition.webp",
+                      "title":  "INFECTION TRANSITION",
+                      "detail":  "감염 전이 / Spore Phantom / 숙주 변화",
+                      "keywords":  [
+                                       "infection transition",
+                                       "감염 전이",
+                                       "전이",
+                                       "숙주 변화",
+                                       "감염자",
+                                       "Spore Phantom",
+                                       "포자 환영",
+                                       "phase",
+                                       "Phase 0",
+                                       "Phase 1",
+                                       "EV-Σ",
+                                       "변이",
+                                       "전환"
+                                   ],
+                      "priority":  230
+                  },
+                  {
+                      "file":  "integration-node.webp",
+                      "title":  "INTEGRATION NODE",
+                      "detail":  "통합 노드 / 감염 인간 / 신경 연결",
+                      "keywords":  [
+                                       "integration node",
+                                       "통합 노드",
+                                       "Integration System",
+                                       "신경 연결",
+                                       "neural link",
+                                       "감염 인간",
+                                       "infected human victim",
+                                       "TS-Ω integration",
+                                       "통합 시스템",
+                                       "숙주 융합",
+                                       "Philadelphia quarantine"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "korea-barrier.webp",
+                      "title":  "KOREA COASTAL DEFENSE BARRIER",
+                      "detail":  "한국 방벽 / 생활구 봉쇄 / 주민 신고",
+                      "keywords":  [
+                                       "한국 방벽",
+                                       "방벽 내부",
+                                       "해안방벽",
+                                       "대한민국 방벽",
+                                       "Korea Barrier",
+                                       "Korean Barrier",
+                                       "Coastal Defense Barrier",
+                                       "생활구",
+                                       "봉쇄",
+                                       "주민 신고",
+                                       "민간 조사 보조원",
+                                       "제12생활구",
+                                       "민원 접수실",
+                                       "CONTROLLED",
+                                       "대한민국",
+                                       "South Korea"
+                                   ],
+                      "priority":  340
+                  },
+                  {
+                      "file":  "mannequin-cluster.webp",
+                      "title":  "MANNEQUIN CLUSTER",
+                      "detail":  "마네킹 군집 / SPEC 대응 기록",
+                      "keywords":  [
+                                       "마네킹",
+                                       "mannequin",
+                                       "마네킹 군집",
+                                       "Mannequin Cluster",
+                                       "SPEC",
+                                       "인형",
+                                       "클러스터",
+                                       "대응법",
+                                       "훈련",
+                                       "강도윤",
+                                       "변이체",
+                                       "이변체"
+                                   ],
+                      "priority":  240
+                  },
+                  {
+                      "file":  "observer-sighting.webp",
+                      "title":  "OBSERVER SIGHTING",
+                      "detail":  "관측자 흔적 / 미분류 비인간 존재 / 기록 오류",
+                      "keywords":  [
+                                       "관측자",
+                                       "Observer",
+                                       "Observer Attention",
+                                       "설명되지 않는 존재",
+                                       "미확인 존재",
+                                       "non-human entity",
+                                       "unknown entity",
+                                       "분류 불가",
+                                       "기록 오염",
+                                       "세션 왜곡",
+                                       "GRANT",
+                                       "Boundary Stability",
+                                       "관측",
+                                       "눈",
+                                       "존재가 보고 있다"
+                                   ],
+                      "priority":  280
+                  },
+                  {
+                      "file":  "philadelphia-breach.webp",
+                      "title":  "PHILADELPHIA BREACH",
+                      "detail":  "Philadelphia 격리 실패 / TS-Ω 브리치",
+                      "keywords":  [
+                                       "Philadelphia",
+                                       "필라델피아",
+                                       "Philadelphia Zone",
+                                       "브리치",
+                                       "breach",
+                                       "격리 실패",
+                                       "quarantine failure",
+                                       "TS-Ω",
+                                       "TS-Omega",
+                                       "hostiles detected",
+                                       "multiple hostiles",
+                                       "도시 감염",
+                                       "Z-Ω",
+                                       "quarantine"
+                                   ],
+                      "priority":  285
+                  },
+                  {
+                      "file":  "philadelphia-drone.webp",
+                      "title":  "PHILADELPHIA DRONE FEED",
+                      "detail":  "Philadelphia 드론 피드 / 봉쇄 구역 / TS-Ω 사건",
+                      "keywords":  [
+                                       "Philadelphia drone",
+                                       "필라델피아 드론",
+                                       "drone feed",
+                                       "드론 피드",
+                                       "Kensington",
+                                       "quarantine zone",
+                                       "봉쇄구역",
+                                       "TS-Ω",
+                                       "바이오하자드",
+                                       "군 개입",
+                                       "MTF",
+                                       "감염 폭발",
+                                       "HELP US NOT HUMAN"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "philadelphia-infected.webp",
+                      "title":  "PHILADELPHIA INFECTION SITE",
+                      "detail":  "Philadelphia 감염지 / 포자 군집 / 생체 성장",
+                      "keywords":  [
+                                       "Philadelphia infected",
+                                       "필라델피아 감염",
+                                       "감염지",
+                                       "infection site",
+                                       "포자 군집",
+                                       "spore clusters",
+                                       "bio-mechanical growth",
+                                       "감염 숙주",
+                                       "도시 감염",
+                                       "TS-Ω",
+                                       "quarantine zone"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "prometheus-vs-wolves.webp",
+                      "title":  "PROMETHEUS VS SILENT WOLVES",
+                      "detail":  "프로메테우스 / Silent Wolves / 교전 기록",
+                      "keywords":  [
+                                       "프로메테우스",
+                                       "PROMETHEUS",
+                                       "Silent Wolves",
+                                       "침묵의 늑대",
+                                       "소바리",
+                                       "wolves",
+                                       "wolf",
+                                       "교전",
+                                       "습격",
+                                       "무전",
+                                       "작전",
+                                       "전술팀",
+                                       "용병",
+                                       "COASTAL MIRROR"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "red-veil.webp",
+                      "title":  "RED VEIL QUARANTINE ZONE",
+                      "detail":  "Red Veil / 감염 기원지 / 국가급 봉쇄",
+                      "keywords":  [
+                                       "Red Veil",
+                                       "레드 베일",
+                                       "Quarantine Zone",
+                                       "격리구역",
+                                       "감염 기원지",
+                                       "origin site",
+                                       "seed spreader spores",
+                                       "국가급 봉쇄",
+                                       "biohazard",
+                                       "warning",
+                                       "포자 살포",
+                                       "레드베일"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "seed-spreader.webp",
+                      "title":  "SEED SPREADER",
+                      "detail":  "Seed Spreader / 대기 포자 살포 개체",
+                      "keywords":  [
+                                       "Seed Spreader",
+                                       "시드 스프레더",
+                                       "시드스프레더",
+                                       "포자 살포",
+                                       "대기 포자",
+                                       "atmospheric spore dispersal",
+                                       "object examination",
+                                       "active",
+                                       "식물형 변이체",
+                                       "포자 개체",
+                                       "seed",
+                                       "spreader"
+                                   ],
+                      "priority":  290
+                  },
+                  {
+                      "file":  "seraph-absolution.webp",
+                      "title":  "SERAPH PROTOCOL ABSOLUTION",
+                      "detail":  "SERAPH / Absolution / 고에너지 존재 반응",
+                      "keywords":  [
+                                       "SERAPH",
+                                       "세라프",
+                                       "Seraph Absolution",
+                                       "Protocol Absolution",
+                                       "Absolution",
+                                       "천사",
+                                       "불꽃",
+                                       "고에너지",
+                                       "신화",
+                                       "종교",
+                                       "프로토콜",
+                                       "빛의 존재",
+                                       "날개",
+                                       "설명되지 않는 존재"
+                                   ],
+                      "priority":  300
+                  },
+                  {
+                      "file":  "seraph-perception.webp",
+                      "title":  "SERAPH PERCEPTION",
+                      "detail":  "SERAPH 지각 반응 / 목격 차이 / 신화권 충돌",
+                      "keywords":  [
+                                       "SERAPH",
+                                       "세라프",
+                                       "Seraph Perception",
+                                       "Perception",
+                                       "지각",
+                                       "목격담",
+                                       "신화",
+                                       "음모론",
+                                       "종교",
+                                       "불꽃 존재",
+                                       "천사형",
+                                       "고에너지 반응",
+                                       "perception varied"
+                                   ],
+                      "priority":  275
+                  },
+                  {
+                      "file":  "silent-belt.webp",
+                      "title":  "SILENT BELT",
+                      "detail":  "Silent Belt / 지연진화 구역 / 침묵권",
+                      "keywords":  [
+                                       "Silent Belt",
+                                       "사일런트 벨트",
+                                       "침묵권",
+                                       "지연진화",
+                                       "DELAYED",
+                                       "혹한",
+                                       "눈보라",
+                                       "전파 지연",
+                                       "무전 침묵",
+                                       "소바리 주변부",
+                                       "산악 지대",
+                                       "slow evolution"
+                                   ],
+                      "priority":  235
+                  },
+                  {
+                      "file":  "silent-wolves-raid.webp",
+                      "title":  "SILENT WOLVES RAID",
+                      "detail":  "Silent Wolves 습격 / 주변부 교전 / 마지막 무전",
+                      "keywords":  [
+                                       "Silent Wolves",
+                                       "침묵의 늑대",
+                                       "소바리",
+                                       "Sovari",
+                                       "wolves raid",
+                                       "습격",
+                                       "마지막 무전",
+                                       "무전",
+                                       "산악 조사팀",
+                                       "현지 협력자",
+                                       "작전 상자",
+                                       "용병",
+                                       "전술 교전"
+                                   ],
+                      "priority":  270
+                  },
+                  {
+                      "file":  "SPEC 마네킹 대응법을 교육하는 강도윤.jpg",
+                      "title":  "SPEC MANNEQUIN TRAINING",
+                      "detail":  "강도윤 / SPEC 마네킹 대응 교육 / 한국지부 훈련",
+                      "keywords":  [
+                                       "강도윤",
+                                       "SPEC 마네킹",
+                                       "마네킹 대응법",
+                                       "대응 교육",
+                                       "교육하는 강도윤",
+                                       "훈련실",
+                                       "전술지휘관",
+                                       "한국지부",
+                                       "이변체 교육",
+                                       "SPEC",
+                                       "mannequin training"
+                                   ],
+                      "priority":  270
+                  },
+                  {
+                      "file":  "SPEC-013 결착체.png",
+                      "title":  "SPEC-013 결착체",
+                      "detail":  "SPEC-013 / 결착체 / 포획 개체",
+                      "keywords":  [
+                                       "SPEC-013",
+                                       "결착체",
+                                       "결착",
+                                       "포획 개체",
+                                       "변이체",
+                                       "이변체",
+                                       "구속",
+                                       "specimen",
+                                       "captured anomaly",
+                                       "한국지부 연구실",
+                                       "containment"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "SPEC-016 Shell Render.png",
+                      "title":  "SPEC-016 SHELL RENDER",
+                      "detail":  "SPEC-016 / Shell Render / 껍질형 개체",
+                      "keywords":  [
+                                       "SPEC-016",
+                                       "Shell Render",
+                                       "쉘 렌더",
+                                       "껍질형",
+                                       "shell",
+                                       "갑각",
+                                       "변이체",
+                                       "이변체",
+                                       "렌더",
+                                       "포획 문서",
+                                       "SPEC"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "SPEC-018 Octortle.png",
+                      "title":  "SPEC-018 OCTORTLE",
+                      "detail":  "SPEC-018 / Octortle / 수중 계열 개체",
+                      "keywords":  [
+                                       "SPEC-018",
+                                       "Octortle",
+                                       "옥토틀",
+                                       "수중 개체",
+                                       "해양 개체",
+                                       "촉수",
+                                       "거북",
+                                       "문어",
+                                       "TS-Ω",
+                                       "bio-mechanical",
+                                       "SPEC"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "SPEC-019 카르타크라.png",
+                      "title":  "SPEC-019 카르타크라",
+                      "detail":  "SPEC-019 / 카르타크라 / 고대 경계 흔적",
+                      "keywords":  [
+                                       "SPEC-019",
+                                       "카르타크라",
+                                       "Kartakra",
+                                       "고대 경계",
+                                       "경계층",
+                                       "비인간 지식층",
+                                       "변이체",
+                                       "이변체",
+                                       "SPEC",
+                                       "boundary"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "SPEC-020 Plaguewing.png",
+                      "title":  "SPEC-020 PLAGUEWING",
+                      "detail":  "SPEC-020 / Plaguewing / 역병 날개 개체",
+                      "keywords":  [
+                                       "SPEC-020",
+                                       "Plaguewing",
+                                       "플레이그윙",
+                                       "역병날개",
+                                       "날개형 개체",
+                                       "감염 확산",
+                                       "공중 개체",
+                                       "포자",
+                                       "변이체",
+                                       "SPEC"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "SPEC-023 Spore Carrier.png",
+                      "title":  "SPEC-023 SPORE CARRIER",
+                      "detail":  "SPEC-023 / Spore Carrier / 포자 운반체",
+                      "keywords":  [
+                                       "SPEC-023",
+                                       "Spore Carrier",
+                                       "스포어 캐리어",
+                                       "포자 운반체",
+                                       "포자",
+                                       "carrier",
+                                       "감염 운반",
+                                       "대기 포자",
+                                       "변이체",
+                                       "SPEC"
+                                   ],
+                      "priority":  265
+                  },
+                  {
+                      "file":  "spore-phantom.webp",
+                      "title":  "SPORE PHANTOM",
+                      "detail":  "Spore Phantom / 포자 환영 / 저시야 목격",
+                      "keywords":  [
+                                       "Spore Phantom",
+                                       "스포어 팬텀",
+                                       "포자 환영",
+                                       "포자 유령",
+                                       "안개",
+                                       "저시야",
+                                       "환영",
+                                       "감염 안개",
+                                       "목격담",
+                                       "fog",
+                                       "phantom"
+                                   ],
+                      "priority":  235
+                  },
+                  {
+                      "file":  "spore-phantom-light.webp",
+                      "title":  "SPORE PHANTOM LIGHT",
+                      "detail":  "Spore Phantom 조명 반응 / 손전등 / 감염 안개",
+                      "keywords":  [
+                                       "Spore Phantom Light",
+                                       "포자 환영",
+                                       "손전등",
+                                       "조명 반응",
+                                       "빛",
+                                       "저시야",
+                                       "안개",
+                                       "감염 안개",
+                                       "flashlight",
+                                       "phantom",
+                                       "spore"
+                                   ],
+                      "priority":  235
+                  },
+                  {
+                      "file":  "tsw-approaching.webp",
+                      "title":  "TS-Ω APPROACHING",
+                      "detail":  "TS-Ω 접근 / Philadelphia 해안 / Titan 개체",
+                      "keywords":  [
+                                       "TS-Ω",
+                                       "TS-Omega",
+                                       "TS Omega",
+                                       "Turtle Hive-Mind",
+                                       "TSW approaching",
+                                       "approaching Philadelphia",
+                                       "타이탄",
+                                       "거대 개체",
+                                       "생체기계",
+                                       "Philadelphia coastline",
+                                       "helicopter down",
+                                       "hostiles converging"
+                                   ],
+                      "priority":  290
+                  },
+                  {
+                      "file":  "tsw-closeup.webp",
+                      "title":  "TS-Ω CLOSEUP",
+                      "detail":  "TS-Ω 근접 관측 / 해양 군체 중심",
+                      "keywords":  [
+                                       "TS-Ω",
+                                       "TS-Omega",
+                                       "TS Omega",
+                                       "Turtle Hive-Mind",
+                                       "closeup",
+                                       "근접 관측",
+                                       "타이탄",
+                                       "해양 군체",
+                                       "Abscessed growth",
+                                       "spore masses",
+                                       "retreat recommended",
+                                       "giant organism"
+                                   ],
+                      "priority":  285
+                  },
+                  {
+                      "file":  "강도윤 정찰.jpg",
+                      "title":  "강도윤 정찰",
+                      "detail":  "강도윤 / 정찰 / 한국지부 현장 작전",
+                      "keywords":  [
+                                       "강도윤",
+                                       "정찰",
+                                       "현장작전",
+                                       "전술지휘관",
+                                       "한국지부",
+                                       "해병대",
+                                       "봉쇄선",
+                                       "현장 확인",
+                                       "수동 확인",
+                                       "작전 보고",
+                                       "Doyun Kang"
+                                   ],
+                      "priority":  265
+                  },
+                  {
+                      "file":  "군용트럭에서 내리는 웨버.jpg",
+                      "title":  "마르쿠스 베버 도착",
+                      "detail":  "웨버 / 군용트럭 / 외부 협력자 도착",
+                      "keywords":  [
+                                       "웨버",
+                                       "마르쿠스 베버",
+                                       "Marcus Weber",
+                                       "군용트럭",
+                                       "트럭 도착",
+                                       "외부 협력자",
+                                       "기지 도착",
+                                       "증명 자료",
+                                       "전출 명령",
+                                       "현장 지원"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "기지 연구소 복도 (2).png",
+                      "title":  "기지 연구소 복도 B",
+                      "detail":  "한국지부 연구소 복도 / EV-Σ 분석 시설",
+                      "keywords":  [
+                                       "기지 연구소",
+                                       "연구소 복도",
+                                       "한국지부 연구실",
+                                       "B-204",
+                                       "EV-Σ 연구 시설",
+                                       "윤세진",
+                                       "억제제",
+                                       "표본 분석",
+                                       "실험실",
+                                       "복도",
+                                       "laboratory corridor"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "기지 연구소 복도.png",
+                      "title":  "기지 연구소 복도",
+                      "detail":  "한국지부 연구소 / 실험실 복도 / 표본 분석",
+                      "keywords":  [
+                                       "기지 연구소",
+                                       "연구소 복도",
+                                       "한국지부 연구실",
+                                       "실험실",
+                                       "표본 분석",
+                                       "감염 표본",
+                                       "EV-Σ",
+                                       "윤세진",
+                                       "복도",
+                                       "containment lab"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "기지 인근 도로 붕괴.png",
+                      "title":  "기지 인근 도로 붕괴",
+                      "detail":  "한국지부 인근 / 도로 붕괴 / 봉쇄선 이상",
+                      "keywords":  [
+                                       "도로 붕괴",
+                                       "기지 인근",
+                                       "봉쇄선",
+                                       "한국지부",
+                                       "비상 경로",
+                                       "대피로",
+                                       "경로 차단",
+                                       "지반 붕괴",
+                                       "현장 파견",
+                                       "길이 다름",
+                                       "route collapse"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "기지 점거.jpg",
+                      "title":  "기지 점거",
+                      "detail":  "한국지부 점거 / 작전 실패 / 내부 위기",
+                      "keywords":  [
+                                       "기지 점거",
+                                       "한국지부 점거",
+                                       "점거",
+                                       "기지 습격",
+                                       "내부 위기",
+                                       "작전 실패",
+                                       "봉쇄 실패",
+                                       "지휘관",
+                                       "간부진",
+                                       "base takeover"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "기지 탈출.jpg",
+                      "title":  "기지 탈출",
+                      "detail":  "기지 탈출 / 비상 경로 / 봉쇄선 외곽",
+                      "keywords":  [
+                                       "기지 탈출",
+                                       "탈출",
+                                       "비상 대피",
+                                       "비상 통로",
+                                       "봉쇄선 외곽",
+                                       "한국지부",
+                                       "대피 터널",
+                                       "탈출 경로",
+                                       "emergency escape"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "기지내 비밀통로.png",
+                      "title":  "기지 내 비밀통로",
+                      "detail":  "한국지부 비밀통로 / 지하 경로 / 대피 터널",
+                      "keywords":  [
+                                       "비밀통로",
+                                       "기지내 비밀통로",
+                                       "지하 통로",
+                                       "대피 터널",
+                                       "한국지부",
+                                       "북측 지하",
+                                       "봉쇄선 외곽",
+                                       "숨겨진 경로",
+                                       "secret passage"
+                                   ],
+                      "priority":  265
+                  },
+                  {
+                      "file":  "기지점거.jpg",
+                      "title":  "기지점거",
+                      "detail":  "한국지부 점거 / 긴급 작전 / 지휘권 위기",
+                      "keywords":  [
+                                       "기지점거",
+                                       "기지 점거",
+                                       "한국지부 점거",
+                                       "지휘권 위기",
+                                       "작전 상황",
+                                       "요원",
+                                       "내부 봉쇄",
+                                       "base occupied",
+                                       "전술 대응"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "밤새고 자료를 모아온 임재혁.jpg",
+                      "title":  "임재혁 자료 분석",
+                      "detail":  "임재혁 / 밤샘 분석 / ORACLE 이상 로그",
+                      "keywords":  [
+                                       "임재혁",
+                                       "자료 분석",
+                                       "밤샘",
+                                       "밤새고 자료",
+                                       "정보분석관",
+                                       "기술관",
+                                       "ORACLE 이상",
+                                       "오라클 로그",
+                                       "시스템 구조",
+                                       "자가진단",
+                                       "외부 접속",
+                                       "Jaehyuk Lim"
+                                   ],
+                      "priority":  270
+                  },
+                  {
+                      "file":  "브레인 시커.png",
+                      "title":  "브레인 시커",
+                      "detail":  "Brain Seeker / 정신 감지형 개체 / SPEC 기록",
+                      "keywords":  [
+                                       "브레인 시커",
+                                       "Brain Seeker",
+                                       "정신 감지",
+                                       "뇌파",
+                                       "기억",
+                                       "인지",
+                                       "감응",
+                                       "SPEC",
+                                       "변이체",
+                                       "이변체",
+                                       "mental anomaly"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "블러드핏 아군 잡음.png",
+                      "title":  "블러드핏 아군 잡음",
+                      "detail":  "Blood Pit / 아군 무전 잡음 / 전장 혼선",
+                      "keywords":  [
+                                       "블러드핏",
+                                       "Blood Pit",
+                                       "아군 잡음",
+                                       "무전 잡음",
+                                       "통신 혼선",
+                                       "혈흔",
+                                       "전장",
+                                       "봉쇄 위기",
+                                       "Shell Talker",
+                                       "감염 교전",
+                                       "radio noise"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "블러드핏.png",
+                      "title":  "블러드핏",
+                      "detail":  "Blood Pit / 현장 이변체 / 봉쇄 위기",
+                      "keywords":  [
+                                       "블러드핏",
+                                       "Blood Pit",
+                                       "혈구덩이",
+                                       "현장 이변체",
+                                       "봉쇄 위기",
+                                       "감염 교전",
+                                       "피트",
+                                       "전술 대응",
+                                       "Act 2",
+                                       "이변체 첫 조우"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "비컨스웜.png",
+                      "title":  "비컨스웜",
+                      "detail":  "Beacon Swarm / 군집 신호 / 위치 유도 개체",
+                      "keywords":  [
+                                       "비컨스웜",
+                                       "Beacon Swarm",
+                                       "비컨",
+                                       "스웜",
+                                       "군집",
+                                       "신호",
+                                       "유도",
+                                       "위치 유도",
+                                       "swarm",
+                                       "beacon",
+                                       "SPEC",
+                                       "감염 군집"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "서하은 전출 후 USB.png",
+                      "title":  "서하은 USB",
+                      "detail":  "서하은 전출 후 남긴 USB / ORACLE 데이터 삭제 흔적",
+                      "keywords":  [
+                                       "서하은",
+                                       "USB",
+                                       "전출",
+                                       "전출 명령",
+                                       "데이터분석",
+                                       "부지휘관",
+                                       "ORACLE 데이터",
+                                       "삭제 흔적",
+                                       "복구 작업",
+                                       "아날로그 백업",
+                                       "Ha-eun Seo"
+                                   ],
+                      "priority":  275
+                  },
+                  {
+                      "file":  "서하은을 지켜보는 누군가.jpg",
+                      "title":  "서하은 감시",
+                      "detail":  "서하은 / 감시 / 관측자성 불안",
+                      "keywords":  [
+                                       "서하은",
+                                       "감시",
+                                       "지켜보는 누군가",
+                                       "미행",
+                                       "관측",
+                                       "Observer Attention",
+                                       "오라클 모니터링",
+                                       "데이터분석",
+                                       "의심",
+                                       "감시 피드"
+                                   ],
+                      "priority":  270
+                  },
+                  {
+                      "file":  "숨어서 유인하는 쉘토커.png",
+                      "title":  "숨어서 유인하는 쉘토커",
+                      "detail":  "Shell Talker / 은폐 유인 / 목소리 모방",
+                      "keywords":  [
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "숨어서 유인",
+                                       "유인",
+                                       "목소리 모방",
+                                       "사람 목소리",
+                                       "은폐",
+                                       "미끼",
+                                       "복도",
+                                       "함정",
+                                       "Shelltalker"
+                                   ],
+                      "priority":  300
+                  },
+                  {
+                      "file":  "쉘워커.jpg",
+                      "title":  "쉘워커",
+                      "detail":  "Shell Walker / 해양 군체 보행 개체",
+                      "keywords":  [
+                                       "쉘워커",
+                                       "Shell Walker",
+                                       "shell walker",
+                                       "해양 군체",
+                                       "보행 개체",
+                                       "TS-Ω",
+                                       "껍질형",
+                                       "감염 개체",
+                                       "완전 변이",
+                                       "Phase 2"
+                                   ],
+                      "priority":  265
+                  },
+                  {
+                      "file":  "쉘토커  포획.jpg",
+                      "title":  "쉘토커 포획",
+                      "detail":  "Shell Talker 포획 / 격리 절차 / 연구 기록",
+                      "keywords":  [
+                                       "쉘토커 포획",
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "포획",
+                                       "격리",
+                                       "구속",
+                                       "연구 기록",
+                                       "containment",
+                                       "captured",
+                                       "SPEC",
+                                       "목소리 모방"
+                                   ],
+                      "priority":  295
+                  },
+                  {
+                      "file":  "쉘토커 연구실 포획상태.png",
+                      "title":  "쉘토커 연구실 포획상태",
+                      "detail":  "Shell Talker / 연구실 포획상태 / 표본 분석",
+                      "keywords":  [
+                                       "쉘토커 연구실",
+                                       "쉘토커 포획상태",
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "연구실",
+                                       "포획상태",
+                                       "표본 분석",
+                                       "윤세진",
+                                       "B-204",
+                                       "격리실",
+                                       "containment lab"
+                                   ],
+                      "priority":  300
+                  },
+                  {
+                      "file":  "쉘토커 촉수가 시체를 미끼로 목소리를 내며 유인.png",
+                      "title":  "쉘토커 미끼 유인",
+                      "detail":  "Shell Talker / 촉수 미끼 / 시체 음성 유인",
+                      "keywords":  [
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "촉수",
+                                       "시체 미끼",
+                                       "목소리 유인",
+                                       "미끼",
+                                       "사망자 목소리",
+                                       "유인 함정",
+                                       "corpse lure",
+                                       "tentacle",
+                                       "voice mimic"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "쉘토커.png",
+                      "title":  "쉘토커",
+                      "detail":  "Shell Talker / 목소리 모방형 이변체",
+                      "keywords":  [
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "Shelltalker",
+                                       "목소리 모방",
+                                       "이변체",
+                                       "감염 개체",
+                                       "사람 목소리",
+                                       "함정",
+                                       "Act 2",
+                                       "첫 조우"
+                                   ],
+                      "priority":  285
+                  },
+                  {
+                      "file":  "시드 스프린더.png",
+                      "title":  "시드 스프린더",
+                      "detail":  "Seed Sprinter / 포자 확산형 빠른 개체",
+                      "keywords":  [
+                                       "시드 스프린더",
+                                       "Seed Sprinter",
+                                       "seed sprinter",
+                                       "시드",
+                                       "스프린더",
+                                       "포자 확산",
+                                       "빠른 개체",
+                                       "감염 확산",
+                                       "달리는 개체",
+                                       "spore runner"
+                                   ],
+                      "priority":  255
+                  },
+                  {
+                      "file":  "안개 너머 식별되지 않는 무언가.png",
+                      "title":  "안개 너머 미확인 존재",
+                      "detail":  "안개 / 미확인 존재 / 관측 불가 실루엣",
+                      "keywords":  [
+                                       "안개 너머",
+                                       "식별되지 않는 무언가",
+                                       "미확인 존재",
+                                       "unknown entity",
+                                       "unidentified",
+                                       "안개",
+                                       "실루엣",
+                                       "관측 불가",
+                                       "Observer",
+                                       "설명되지 않는 존재",
+                                       "저시야"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "오라클 삭제 시도.jpg",
+                      "title":  "DELETED RECORD TRACE",
+                      "detail":  "삭제 로그 / CMS 오류 / 소유권 기록 훼손",
+                      "keywords":  [
+                                       "오라클 삭제 시도",
+                                       "ORACLE 삭제",
+                                       "삭제 로그",
+                                       "삭제된 기사",
+                                       "기사 초안",
+                                       "CMS",
+                                       "복구 로그",
+                                       "마이더스손",
+                                       "마이더스의 손",
+                                       "Midas Hand",
+                                       "AfterGold_0310",
+                                       "광고 계약서",
+                                       "계약서",
+                                       "소유권 기록",
+                                       "기록 훼손",
+                                       "ECHO-7",
+                                       "CASCADE MIDAS"
+                                   ],
+                      "priority":  315
+                  },
+                  {
+                      "file":  "오라클 충성.jpg",
+                      "title":  "ORACLE LOYALTY MONITOR",
+                      "detail":  "ORACLE 충성도 / 지휘관 모니터링 / 순응 프로토콜",
+                      "keywords":  [
+                                       "오라클 충성",
+                                       "ORACLE loyalty",
+                                       "충성도",
+                                       "요원 충성도",
+                                       "자발적 복종",
+                                       "지휘관 모니터링",
+                                       "ORACLE",
+                                       "프록시 네트워크",
+                                       "순응 프로토콜",
+                                       "효율적인 지휘관"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "요원들에게 제압당한 지휘관.png",
+                      "title":  "제압당한 지휘관",
+                      "detail":  "지휘관 제압 / 내부 통제 / 한국지부 위기",
+                      "keywords":  [
+                                       "지휘관",
+                                       "제압",
+                                       "요원들에게 제압",
+                                       "이중철",
+                                       "PILEHEAD",
+                                       "내부 통제",
+                                       "한국지부",
+                                       "체포",
+                                       "명령 불복",
+                                       "ORACLE 지시",
+                                       "commander restrained"
+                                   ],
+                      "priority":  260
+                  },
+                  {
+                      "file":  "자이언트.png",
+                      "title":  "GIANT ENTITY",
+                      "detail":  "거대 개체 / Titan 급 위협 / 해양 군체 흔적",
+                      "keywords":  [
+                                       "자이언트",
+                                       "Giant",
+                                       "거대 개체",
+                                       "Titan",
+                                       "타이탄",
+                                       "TS-Ω",
+                                       "해양 군체",
+                                       "거대 생체",
+                                       "giant entity",
+                                       "massive organism",
+                                       "위협"
+                                   ],
+                      "priority":  265
+                  },
+                  {
+                      "file":  "지휘관실 앞에 모인 간부4인.jpg",
+                      "title":  "한국지부 간부4인",
+                      "detail":  "지휘관실 / 간부진 / 한국지부 회의",
+                      "keywords":  [
+                                       "간부4인",
+                                       "간부진",
+                                       "지휘관실",
+                                       "한국지부",
+                                       "서하은",
+                                       "강도윤",
+                                       "윤세진",
+                                       "임재혁",
+                                       "이중철",
+                                       "회의",
+                                       "브리핑",
+                                       "command staff"
+                                   ],
+                      "priority":  275
+                  },
+                  {
+                      "file":  "탈출 중 쉘토커 격벽 부수고 기습.jpg",
+                      "title":  "쉘토커 격벽 기습",
+                      "detail":  "탈출 중 Shell Talker 기습 / 격벽 파손",
+                      "keywords":  [
+                                       "탈출 중",
+                                       "쉘토커",
+                                       "Shell Talker",
+                                       "격벽",
+                                       "격벽 부수고",
+                                       "기습",
+                                       "탈출",
+                                       "비상 대피",
+                                       "문 파손",
+                                       "ambush",
+                                       "containment breach"
+                                   ],
+                      "priority":  315
+                  },
+                  {
+                      "file":  "한국지부 비밀 통로로 탈출한 지휘관과 간부4인.jpg",
+                      "title":  "한국지부 비밀통로 탈출",
+                      "detail":  "지휘관과 간부4인 / 비밀 통로 탈출 / 한국지부",
+                      "keywords":  [
+                                       "한국지부 비밀 통로",
+                                       "비밀 통로 탈출",
+                                       "지휘관과 간부4인",
+                                       "간부4인",
+                                       "지휘관",
+                                       "탈출",
+                                       "대피 터널",
+                                       "한국지부",
+                                       "봉쇄선 외곽",
+                                       "secret route escape"
+                                   ],
+                      "priority":  295
+                  },
+                  {
+                      "file":  "한국지부 지하 하수시설에서 쏟아지는 폐수.png",
+                      "title":  "한국지부 지하 폐수",
+                      "detail":  "지하 하수시설 / 폐수 유출 / 기지 누수",
+                      "keywords":  [
+                                       "한국지부 하수시설",
+                                       "지하 하수시설",
+                                       "폐수",
+                                       "쏟아지는 폐수",
+                                       "누수",
+                                       "지하",
+                                       "오염수",
+                                       "기지 시설",
+                                       "봉쇄선 유지보수",
+                                       "sewage leak"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "한국지부 하수시설 누수.png",
+                      "title":  "한국지부 하수시설 누수",
+                      "detail":  "하수시설 누수 / 지하 시설 이상 / 오염 확산 위험",
+                      "keywords":  [
+                                       "한국지부 하수시설",
+                                       "하수시설 누수",
+                                       "누수",
+                                       "지하 시설",
+                                       "오염 확산",
+                                       "폐수",
+                                       "기지 시설",
+                                       "수동 확인",
+                                       "시설 유지보수",
+                                       "leak"
+                                   ],
+                      "priority":  250
+                  },
+                  {
+                      "file":  "choir-worship.webp",
+                      "title":  "HYEONMUKYO CHOIR WORSHIP",
+                      "detail":  "현무교 / 표면 종교 의식 / 합창 예배",
+                      "keywords":  [
+                                       "현무교",
+                                       "Hyeonmukyo",
+                                       "choir",
+                                       "worship",
+                                       "합창",
+                                       "예배",
+                                       "종교 생활",
+                                       "표면 교리",
+                                       "신앙",
+                                       "의식",
+                                       "성가",
+                                       "집회",
+                                       "PUBLIC 종교",
+                                       "민간 종교"
+                                   ],
+                      "priority":  240
+                  },
+                  {
+                      "file":  "ember-ash.webp",
+                      "title":  "EMBER ASH",
+                      "detail":  "불씨와 재 / SERAPH 잔열 / 화염 흔적",
+                      "keywords":  [
+                                       "Ember Ash",
+                                       "ember",
+                                       "ash",
+                                       "불씨",
+                                       "재",
+                                       "잔불",
+                                       "화염 흔적",
+                                       "SERAPH",
+                                       "세라프",
+                                       "고에너지",
+                                       "불꽃",
+                                       "소각 흔적",
+                                       "burn mark",
+                                       "thermal anomaly"
+                                   ],
+                      "priority":  245
+                  },
+                  {
+                      "file":  "kr-kang-doyun.png",
+                      "title":  "강도윤",
+                      "detail":  "강도윤 / 전술지휘관 / 현장작전 및 봉쇄선 관리",
+                      "keywords":  [
+                                       "강도윤",
+                                       "Doyun Kang",
+                                       "Kang Doyun",
+                                       "전술지휘관",
+                                       "현장작전",
+                                       "봉쇄선 관리",
+                                       "해병대",
+                                       "정찰",
+                                       "야간 순찰",
+                                       "현장 파트너",
+                                       "KR-INIT-001",
+                                       "한국지부"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "kr-lee-jungchul.png",
+                      "title":  "이중철 PILEHEAD",
+                      "detail":  "이중철 / Pilehead / 한국지부 지휘관",
+                      "keywords":  [
+                                       "이중철",
+                                       "Lee Jungchul",
+                                       "Lee Jung-cheol",
+                                       "PILEHEAD",
+                                       "Pilehead",
+                                       "지휘관",
+                                       "한국지부 지휘관",
+                                       "초대 지휘관",
+                                       "특수부대",
+                                       "ORACLE Proxy",
+                                       "KR-INIT-001",
+                                       "플레이어 캐릭터"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "kr-lim-jaehyuk.png",
+                      "title":  "임재혁",
+                      "detail":  "임재혁 / 정보분석관 / ORACLE 시스템 이상 추적",
+                      "keywords":  [
+                                       "임재혁",
+                                       "Jaehyuk Lim",
+                                       "Lim Jaehyuk",
+                                       "정보분석관",
+                                       "기술관",
+                                       "기지 보안",
+                                       "ORACLE 연동",
+                                       "외부 접속",
+                                       "비공개 레이어",
+                                       "시스템 구조",
+                                       "자가진단 로그",
+                                       "KR-INIT-001"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "kr-seo-haeun.png",
+                      "title":  "서하은",
+                      "detail":  "서하은 / 부지휘관 / ORACLE 데이터 분석",
+                      "keywords":  [
+                                       "서하은",
+                                       "Seo Haeun",
+                                       "Seo Ha-eun",
+                                       "부지휘관",
+                                       "데이터분석",
+                                       "ORACLE 데이터",
+                                       "선별적 지연",
+                                       "전출 명령",
+                                       "아날로그 백업",
+                                       "삭제 로그",
+                                       "복구 작업",
+                                       "KR-INIT-001"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "kr-yoon-sejin.png",
+                      "title":  "윤세진",
+                      "detail":  "윤세진 / 연구원 겸 의료관 / EV-Σ 억제제 연구",
+                      "keywords":  [
+                                       "윤세진",
+                                       "Yoon Sejin",
+                                       "Yoon Se-jin",
+                                       "연구원",
+                                       "의료관",
+                                       "EV-Σ",
+                                       "억제제",
+                                       "표본 분석",
+                                       "프리온 단백질",
+                                       "Phase 0",
+                                       "감염 치료",
+                                       "B-204",
+                                       "한국지부 연구실"
+                                   ],
+                      "priority":  310
+                  },
+                  {
+                      "file":  "meridian-richter.webp",
+                      "title":  "MERIDIAN RICHTER",
+                      "detail":  "Meridian / Richter / 기업 계열 접촉자",
+                      "keywords":  [
+                                       "Meridian",
+                                       "메리디언",
+                                       "Richter",
+                                       "리히터",
+                                       "기업",
+                                       "하청 데이터",
+                                       "비용 감사",
+                                       "계약",
+                                       "물류",
+                                       "상업 위협",
+                                       "corporate",
+                                       "enterprise",
+                                       "데이터 정리원"
+                                   ],
+                      "priority":  260
+                  }
+              ]
+}
