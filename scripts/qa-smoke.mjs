@@ -89,7 +89,7 @@ async function main() {
     assert(login.response.ok, `Access login failed: HTTP ${login.response.status}`);
   }
 
-  const auth = await jar.json("/api/auth", asJsonPost({ id: env.TIU_ADMIN_ID || "admin", password: env.TIU_ADMIN_PASSWORD || "0000" }));
+  const auth = await jar.json("/api/auth", asJsonPost({ id: env.TIU_ADMIN_ID || "admin", password: env.TIU_ADMIN_PASSWORD || "KSH2202@TIU#" }));
   assert(auth.response.ok, `Admin login failed: HTTP ${auth.response.status}`);
 
   const assets = await jar.json("/api/assets/scene-images");

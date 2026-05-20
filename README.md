@@ -50,7 +50,7 @@ TIU_OBSIDIAN_VAULT_DIR=
 TIU_ACCESS_PASSWORD=
 TIU_ACCESS_SECRET=
 TIU_ADMIN_ID=admin
-TIU_ADMIN_PASSWORD=0000
+TIU_ADMIN_PASSWORD=KSH2202@TIU#
 TIU_ADMIN_DISPLAY_NAME=관리자
 TIU_ACCOUNT_SECRET=
 TIU_CLOUD_STORAGE_PROVIDER=disabled
@@ -63,7 +63,7 @@ For Vercel, add the same values in Project Settings -> Environment Variables.
 
 `TIU_ACCESS_PASSWORD` is the simple tester password. `TIU_ACCESS_SECRET` is a private cookie-signing secret.
 
-The tester password gate remains the private entry point. After that gate, the app uses a temporary admin login for testing. The default is `admin / 0000`; override it with `TIU_ADMIN_ID` and `TIU_ADMIN_PASSWORD` before sharing broadly. `TIU_ADMIN_DISPLAY_NAME` is used as the account display name and fills the internal `{user}` placeholder when a player does not set a character name.
+The tester password gate remains the private entry point. After that gate, the app uses a temporary admin login for testing. The default is `admin / KSH2202@TIU#`; override it with `TIU_ADMIN_ID` and `TIU_ADMIN_PASSWORD` before sharing broadly. `TIU_ADMIN_DISPLAY_NAME` is used as the account display name and fills the internal `{user}` placeholder when a player does not set a character name.
 
 `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` are optional. Leave them blank while Claude billing/API access is unresolved. When both values are set, the in-game model menu can route a session through Claude without changing code.
 

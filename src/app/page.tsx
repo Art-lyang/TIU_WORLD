@@ -2882,7 +2882,6 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [continuingTurnIndex, setContinuingTurnIndex] = useState<number | null>(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [showPlayerMemo, setShowPlayerMemo] = useState(false);
   const [showFreeformInput, setShowFreeformInput] = useState(false);
   const [showCustomStartInput, setShowCustomStartInput] = useState(false);
@@ -2947,7 +2946,6 @@ export default function Home() {
     activeSessionIdRef.current = save.id;
     setTurns(save.turns);
     setInput("");
-    setShowSuggestions(false);
     setShowPlayerMemo(false);
     setShowFreeformInput(false);
     setShowCustomStartInput(false);
@@ -3195,7 +3193,6 @@ export default function Home() {
     activeSessionIdRef.current = null;
     setTurns([]);
     setInput("");
-    setShowSuggestions(false);
     setShowPlayerMemo(false);
     setShowFreeformInput(false);
     setShowCustomStartInput(false);
@@ -3226,7 +3223,6 @@ export default function Home() {
       activeSessionIdRef.current = null;
       setTurns([]);
       setInput("");
-      setShowSuggestions(false);
       setShowPlayerMemo(false);
       setShowFreeformInput(false);
       setShowCustomStartInput(false);
@@ -3672,7 +3668,6 @@ export default function Home() {
     setTurns(nextTurns);
     setInput("");
     setLoading(true);
-    setShowSuggestions(false);
     setShowFreeformInput(false);
     setShowCustomStartInput(false);
 
@@ -3737,7 +3732,6 @@ export default function Home() {
 
     setLoading(true);
     setContinuingTurnIndex(turnIndex);
-    setShowSuggestions(false);
 
     try {
       const res = await fetch("/api/chat", {
@@ -5648,12 +5642,12 @@ export default function Home() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setShowSuggestions((value) => !value)}
+                onClick={() => undefined}
                 disabled={loading || !hasSuggestions}
-                aria-pressed={showSuggestions}
+                aria-pressed={hasSuggestions}
                 aria-label={text.bottom.aiLabel}
                 className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
-                  showSuggestions
+                  hasSuggestions
                     ? "border-blue-400/70 bg-blue-950/35 text-blue-100"
                     : "border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:border-blue-500/40 hover:text-zinc-100"
                 } disabled:cursor-not-allowed disabled:opacity-40`}
@@ -5688,7 +5682,7 @@ export default function Home() {
               )}
             </div>
 
-            {showSuggestions && hasSuggestions && (
+            {hasSuggestions && (
               <div className="mt-2 grid grid-cols-1 gap-1.5 rounded-md border border-zinc-800 bg-zinc-950/50 p-2">
                 {choices.map((c, i) => (
                   <button

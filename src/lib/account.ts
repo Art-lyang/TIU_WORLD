@@ -15,7 +15,7 @@ function adminId(): string {
 }
 
 function adminPassword(): string {
-  return process.env.TIU_ADMIN_PASSWORD?.trim() || "0000";
+  return process.env.TIU_ADMIN_PASSWORD?.trim() || "KSH2202@TIU#";
 }
 
 function adminDisplayName(): string {

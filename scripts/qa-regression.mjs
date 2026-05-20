@@ -101,7 +101,7 @@ async function authenticate(jar) {
 
   const auth = await jar.json("/api/auth", jsonPost({
     id: env.TIU_ADMIN_ID || "admin",
-    password: env.TIU_ADMIN_PASSWORD || "0000",
+    password: env.TIU_ADMIN_PASSWORD || "KSH2202@TIU#",
   }));
   assert(auth.response.ok, `Admin login failed: HTTP ${auth.response.status}`);
 }
