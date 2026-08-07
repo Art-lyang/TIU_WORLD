@@ -46,6 +46,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     authenticated: Boolean(profile),
     profile,
+    // 관리자 계정이 실제로 설정되어 있는지. UI 안내 문구가 사실과 어긋나지 않도록 노출한다.
+    configured: isAdminLoginEnabled(),
   });
 }
 

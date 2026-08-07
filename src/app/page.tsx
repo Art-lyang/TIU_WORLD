@@ -364,6 +364,7 @@ const UI_TEXT = {
       roleAdmin: "관리자",
       signupPending: "회원가입은 클라우드 DB 연결 후 활성화됩니다. 지금은 임시 관리자 계정으로 테스트합니다.",
       adminHint: "임시 테스트 관리자 계정이 설정되어 있습니다.",
+      adminNotConfigured: "관리자 계정이 아직 설정되지 않았습니다. TIU_ADMIN_PASSWORD와 서명 비밀값을 채운 뒤 서버를 다시 시작하세요.",
       profileTitle: "현재 계정",
       profileDetail: "캐릭터 이름을 직접 쓰지 않으면 이 표시 이름이 기본 이름으로 사용됩니다.",
       legalLink: "테스터 고지 / 개인정보 안내",
@@ -618,6 +619,7 @@ const UI_TEXT = {
       roleAdmin: "Admin",
       signupPending: "Sign-up turns on after cloud database storage is connected. Use the temporary admin account for now.",
       adminHint: "A temporary test admin account is configured.",
+      adminNotConfigured: "No admin account is configured yet. Set TIU_ADMIN_PASSWORD and a signing secret, then restart the server.",
       profileTitle: "Current Account",
       profileDetail: "If no character name is set, this display name is used as the default name.",
       legalLink: "Tester Notice / Privacy Info",
@@ -2634,6 +2636,7 @@ function AccountGateScreen({
   loginPassword,
   error,
   loading,
+  accountConfigured,
   onLanguageChange,
   onLoginModeChange,
   onLoginIdChange,
@@ -2647,6 +2650,8 @@ function AccountGateScreen({
   loginPassword: string;
   error: string;
   loading: boolean;
+  /** null이면 아직 서버 확인 전. false면 관리자 계정 미설정. */
+  accountConfigured: boolean | null;
   onLanguageChange: (language: Language) => void;
   onLoginModeChange: (mode: "login" | "signup") => void;
   onLoginIdChange: (value: string) => void;
@@ -2707,8 +2712,14 @@ function AccountGateScreen({
                 className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none"
               />
             </label>
-            <p className="rounded border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs leading-relaxed text-zinc-500">
-              {labels.adminHint}
+            <p
+              className={`rounded border px-3 py-2 text-xs leading-relaxed ${
+                accountConfigured === false
+                  ? "border-amber-500/40 bg-amber-950/20 text-amber-200"
+                  : "border-zinc-800 bg-zinc-950/70 text-zinc-500"
+              }`}
+            >
+              {accountConfigured === false ? labels.adminNotConfigured : labels.adminHint}
             </p>
             <a
               href="/legal"
@@ -2995,6 +3006,8 @@ export default function Home() {
   const [accessLoading, setAccessLoading] = useState(false);
   const [accountChecked, setAccountChecked] = useState(false);
   const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
+  // 서버에 관리자 계정이 실제로 설정되어 있는지. null은 아직 확인 전.
+  const [accountConfigured, setAccountConfigured] = useState<boolean | null>(null);
   const [accountLoginMode, setAccountLoginMode] = useState<"login" | "signup">("login");
   const [accountLoginId, setAccountLoginId] = useState("admin");
   const [accountLoginPassword, setAccountLoginPassword] = useState("");
@@ -3325,9 +3338,10 @@ export default function Home() {
     setAccountChecked(false);
     return fetch(ACCOUNT_ENDPOINT)
       .then((res) => (res.ok ? res.json() : { authenticated: false, profile: null }))
-      .then((data: { authenticated?: boolean; profile?: unknown }) => {
+      .then((data: { authenticated?: boolean; profile?: unknown; configured?: boolean }) => {
         const profile = data.authenticated ? normalizeAccountProfile(data.profile) : null;
         setAccountProfile(profile);
+        setAccountConfigured(data.configured !== false);
         setAccountDisplayNameDraft(profile?.displayName ?? "");
       })
       .catch(() => {
@@ -4310,6 +4324,7 @@ export default function Home() {
         loginPassword={accountLoginPassword}
         error={accountError}
         loading={accountLoading}
+        accountConfigured={accountConfigured}
         onLanguageChange={setLanguage}
         onLoginModeChange={setAccountLoginMode}
         onLoginIdChange={setAccountLoginId}
