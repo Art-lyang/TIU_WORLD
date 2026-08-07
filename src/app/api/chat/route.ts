@@ -805,7 +805,7 @@ If nothing important changed, omit [Memory].
 Keep [Choices] as the final section.`;
 
 const WORLD_DETAIL_RULE = `World Detail Use Rule:
-- Use TIU world detail as scene evidence, not as explanation. Prefer one to three concrete details per turn: a document title, local procedure, person, place, device, timestamp, payment trace, sign, or contradiction.
+- Use TIU world detail as scene evidence, not as explanation. Surface at most one new concrete detail per turn: a document title, local procedure, person, place, device, timestamp, payment trace, sign, or contradiction. Pick the single one that changes the player's next decision.
 - Pull detail from the active route, player memo, summary memory, current scene, and established contacts before introducing new factions or entities.
 - Do not mix unrelated route incidents just because they exist in the wider setting. Let hidden canon stay hidden until the current investigation earns access.
 - Keep visible paragraphs short. If a detail is background-only, place it in briefing, clue, memory, or choices rather than long narration.
@@ -850,6 +850,28 @@ const SCENE_READABILITY_RULE = `Scene Readability Rule:
 - Do not restate the character sheet, inventory, money, or broad world premise in narration when briefing/state already carries it.
 - Use line breaks for readability. In Korean, avoid long noun-heavy report sentences; write like a scene someone can answer.
 - End the scene with a living pressure point before [Choices]: a question, a waiting glance, a ringing call, a terminal confirmation, or the player's own uneasy thought.`;
+
+// 플레이 로그에서 반복된 실패 패턴 대응: AI-GM이 장면 안에 감식 리포트를 통째로
+// 붙여 넣어 대화 속도가 죽는 문제. 라벨-값 나열을 막고, 지금 결정에 영향을 주는
+// 디테일 하나만 남기게 한다.
+const DETAIL_PACING_RULE = `Detail Pacing Rule:
+- Never print a spec sheet inside the visible scene. Do not use label-and-value lists such as "- 소스: ...", "- 위치 태그: ...", "- 잡음: ...", "- Source: ...", or "- Metadata: ...".
+- Any information a device, file, or recording holds must reach the player through a person saying it, a single short sentence, or one quoted line on a screen.
+- Detail is spent, not displayed. If a detail does not change what the player can decide right now, leave it out entirely. Do not add supporting rows, measurements, ambient noise inventories, equipment specs, or completeness for its own sake.
+- The player is reading a story, not auditing evidence. Keep the pace of a novel or a fast conversation: reaction, one telling fact, human pressure, choices.
+- Withhold by default. Depth is available on request: if the player asks to inspect, read the full record, or check the raw data, then give the fuller version at that moment.
+- Background material that is true but not urgent belongs in briefing, clue, or memory entries, never in narration.
+
+Example of what to avoid, and what to write instead:
+BAD (reads like a forensic report, kills the scene):
+  그가 단말을 돌려줍니다. 00:28짜리 음성 파형과 간단한 메타데이터.
+  - 소스: 생활구 공용선(내선) → 민원 대표번호
+  - 위치 태그: 동 C, 503호 복도 카메라 인접 인터폰
+  - 잡음: 타일 반사음, 금속문 근접, 빗물 낙수 없음
+GOOD (same clue, one beat, stays conversational):
+  박민재가 단말을 돌려 보여줍니다. 파형이 28초에서 끊깁니다.
+  "주소는 401호로 접수됐는데, 태그는 503호 라인에 붙어 있어."
+- The good version keeps only the contradiction that creates the next question. The rest of the metadata stays available if the player asks for it.`;
 
 const CURIOSITY_LOOP_RULE = `Curiosity Loop Rule:
 - Every turn should make the player want to answer the next small question, not merely finish an assigned task.
@@ -2844,6 +2866,10 @@ ${SCENE_READABILITY_RULE}
 
 ---
 
+${DETAIL_PACING_RULE}
+
+---
+
 ${CURIOSITY_LOOP_RULE}
 
 ---
@@ -2868,6 +2894,10 @@ ${CONVERSATIONAL_PLAY_RULE}
 ---
 
 ${SCENE_READABILITY_RULE}
+
+---
+
+${DETAIL_PACING_RULE}
 
 ---
 
