@@ -15,7 +15,7 @@ function adminId(): string {
 }
 
 function adminPassword(): string {
-  return process.env.TIU_ADMIN_PASSWORD?.trim() || "KSH2202@TIU#";
+  return process.env.TIU_ADMIN_PASSWORD?.trim() ?? "";
 }
 
 function adminDisplayName(): string {
@@ -27,8 +27,14 @@ function accountSecret(): string {
     process.env.TIU_ACCOUNT_SECRET?.trim() ||
     process.env.TIU_ACCESS_SECRET?.trim() ||
     process.env.TIU_ACCESS_PASSWORD?.trim() ||
-    "tiu-local-account-secret"
+    ""
   );
+}
+
+// 관리자 로그인은 비밀번호와 서명 비밀값이 모두 설정된 경우에만 활성화한다.
+// 기본값을 두면 공개 저장소를 읽은 사람이 그대로 로그인하거나 쿠키를 위조할 수 있다.
+export function isAdminLoginEnabled(): boolean {
+  return adminPassword().length > 0 && accountSecret().length > 0;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -48,6 +54,7 @@ export function sanitizeDisplayName(value: unknown): string {
 }
 
 export function verifyAccountLogin(id: string, password: string): AccountProfile | null {
+  if (!isAdminLoginEnabled()) return null;
   if (!safeEqual(id.trim(), adminId())) return null;
   if (!safeEqual(password, adminPassword())) return null;
 
@@ -64,7 +71,7 @@ export function createAccountToken(profile: AccountProfile): string {
 }
 
 export function verifyAccountToken(token: string | undefined): AccountProfile | null {
-  if (!token) return null;
+  if (!token || !isAdminLoginEnabled()) return null;
 
   const [payload, signature] = token.split(".");
   if (!payload || !signature || !safeEqual(signature, sign(payload))) return null;

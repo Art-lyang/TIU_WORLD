@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { ACCESS_COOKIE, isAccessEnabled, verifyAccessToken } from "@/lib/access";
-import { ACCOUNT_COOKIE, verifyAccountToken } from "@/lib/account";
+import { ACCOUNT_COOKIE, isAdminLoginEnabled, verifyAccountToken } from "@/lib/account";
 import { getCloudStorageStatus } from "@/lib/cloudStorage";
 import { getWorldIndexStatus } from "@/lib/worldIndex";
 
@@ -137,7 +137,7 @@ export async function GET(req: Request) {
     },
     access: {
       privateGateConfigured: isAccessEnabled(),
-      accountGateConfigured: true,
+      accountGateConfigured: isAdminLoginEnabled(),
       writeMode,
       vercel: Boolean(process.env.VERCEL),
     },

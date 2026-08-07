@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   ACCOUNT_COOKIE,
   createAccountToken,
+  isAdminLoginEnabled,
   sanitizeDisplayName,
   verifyAccountLogin,
   verifyAccountToken,
@@ -51,6 +52,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!hasAccess(req)) {
     return NextResponse.json({ error: "접속 비밀번호가 필요합니다." }, { status: 401 });
+  }
+
+  if (!isAdminLoginEnabled()) {
+    return NextResponse.json(
+      { error: "관리자 로그인이 설정되지 않았습니다. TIU_ADMIN_PASSWORD와 TIU_ACCOUNT_SECRET을 설정해 주세요." },
+      { status: 503 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));

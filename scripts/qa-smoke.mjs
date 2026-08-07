@@ -89,7 +89,8 @@ async function main() {
     assert(login.response.ok, `Access login failed: HTTP ${login.response.status}`);
   }
 
-  const auth = await jar.json("/api/auth", asJsonPost({ id: env.TIU_ADMIN_ID || "admin", password: env.TIU_ADMIN_PASSWORD || "KSH2202@TIU#" }));
+  assert(env.TIU_ADMIN_PASSWORD, "TIU_ADMIN_PASSWORD is required. Admin login has no built-in default password.");
+  const auth = await jar.json("/api/auth", asJsonPost({ id: env.TIU_ADMIN_ID || "admin", password: env.TIU_ADMIN_PASSWORD }));
   assert(auth.response.ok, `Admin login failed: HTTP ${auth.response.status}`);
 
   const assets = await jar.json("/api/assets/scene-images");
