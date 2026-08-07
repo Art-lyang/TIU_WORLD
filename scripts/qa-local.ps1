@@ -6,6 +6,10 @@ try {
   npm run lint
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  # 서버가 필요 없는 순수 로직 검증이라 빌드 전에 먼저 돌린다.
+  npm run qa:engine
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   npm run build
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

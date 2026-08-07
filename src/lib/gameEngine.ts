@@ -10,6 +10,9 @@ import type {
   NpcRecord,
   NpcRelation,
 } from "@/types/game";
+// 같은 폴더의 형제 모듈이라 상대 경로를 쓴다.
+// scripts/qa-engine.mjs가 Next 번들러 없이 이 파일을 직접 실행할 수 있어야 한다.
+import { matchRoute } from "./routes.ts";
 
 type EngineLanguage = "ko" | "en";
 
@@ -311,25 +314,60 @@ const OPEN_PROFILE: RouteProfile = {
 };
 
 function detectRouteProfile(source: string): RouteProfile {
-  const lower = source.toLowerCase();
+  // 탐지 패턴은 src/lib/routes.ts가 단일 출처다. 엔진이 자체 정규식을 들고 있으면
+  // UI/챗 라우트와 판정이 갈라진다.
+  const matched = matchRoute(source);
+  if (!matched) return OPEN_PROFILE;
+  return ROUTE_PROFILES.find((profile) => profile.id === matched.id) ?? OPEN_PROFILE;
+}
 
-  if (/midas|마이더스|괴담 조사 기자|urban legend|aftergold/.test(lower)) {
-    return ROUTE_PROFILES[0];
-  }
-  if (/한국 방벽|방벽|생활구|주민 신고|child voice|living zone|coastal defense barrier/.test(lower)) {
-    return ROUTE_PROFILES[1];
-  }
-  if (/kr-init-?001|잔여 문서|복원 로그|기록 관리자|archive|restoration log/.test(lower)) {
-    return ROUTE_PROFILES[2];
-  }
-  if (/남극|거대공동|현장 파견|antarctic|field anomaly|entry route|hollow/.test(lower)) {
-    return ROUTE_PROFILES[3];
-  }
-  if (/스트리머|유튜버|방송|트위치|아프리카|youtube|twitch|streamer|broadcast/.test(lower)) {
-    return ROUTE_PROFILES[4];
-  }
+// 단서별 판정 키워드. 이 키워드가 등장하는 문장만 그 단서의 근거로 인정한다.
+// 이 표가 없으면 이력 전체를 한 덩어리로 훑게 되어, 어딘가에 "확인 완료"가
+// 한 번 나오는 순간 그 루트의 단서가 전부 함께 승격되는 문제가 생긴다.
+const CLUE_KEYWORDS: Record<string, string[]> = {
+  "midas-deleted-draft": ["초안", "기사", "cms", "draft", "article"],
+  "midas-sponsorship-contract": ["협찬", "제안서", "계약", "광고", "sponsorship", "contract"],
+  "midas-locker-photo": ["라커", "폐상가", "사진", "locker", "photo"],
+  "barrier-child-voice-report": ["아이 목소리", "목소리", "신고", "child voice", "report"],
+  "barrier-no-child-record": ["거주 기록", "미성년자", "세대", "residence", "record"],
+  "barrier-pediatric-alert": ["소아과", "예약", "알림", "pediatric", "appointment"],
+  "krinit-restoration-log": ["복원", "로그", "restoration", "log"],
+  "krinit-requester-player": ["요청자", "계정", "requester", "account"],
+  "krinit-clearance-gap": ["열람 등급", "등급", "권한", "clearance"],
+  "antarctic-route-change": ["경로", "승인자", "변경", "route", "approval"],
+  "antarctic-map-scale": ["축척", "지도", "map", "scale"],
+  "antarctic-third-marker": ["표지", "표지판", "손글씨", "marker", "sign"],
+  "stream-future-upload": ["업로드", "미래", "클립 목록", "upload"],
+  "stream-deleted-clip": ["삭제된 클립", "클립", "링크", "clip", "link"],
+  "stream-login-record": ["로그인", "접속", "보안 메일", "login"],
+  "custom-first-message": ["첫 메시지", "메시지", "연락", "message", "contact"],
+  "custom-local-trace": ["흔적", "현장", "소지품", "trace", "scene"],
+};
 
-  return OPEN_PROFILE;
+/** 이력을 문장 단위로 쪼갠다. 단서 근거를 문장 범위로 좁히기 위한 전처리. */
+function splitSegments(source: string): string[] {
+  return source
+    .split(/\r?\n|(?<=[.!?。])\s+/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+}
+
+/** 해당 단서를 실제로 언급하는 문장만 모은다. 없으면 빈 문자열. */
+function evidenceForClue(segments: string[], clueItem: ClueRecord): string {
+  const keywords = CLUE_KEYWORDS[clueItem.id] ?? [];
+  const titleTokens = clueItem.title
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+  const needles = [...keywords, ...titleTokens].map((needle) => needle.toLowerCase());
+  if (needles.length === 0) return "";
+
+  return segments
+    .filter((segment) => {
+      const lower = segment.toLowerCase();
+      return needles.some((needle) => lower.includes(needle));
+    })
+    .join("\n");
 }
 
 function inferDisclosureLevel(source: string): DisclosureLevel {
@@ -367,11 +405,24 @@ function mergeClue(target: Map<string, ClueRecord>, incoming: ClueRecord): void 
   });
 }
 
-function buildClueRecords(profile: RouteProfile, briefing: GameBriefing | undefined, source: string): ClueRecord[] {
+function buildClueRecords(
+  profile: RouteProfile,
+  briefing: GameBriefing | undefined,
+  source: string,
+  previous: ClueRecord[] = [],
+): ClueRecord[] {
   const clues = new Map<string, ClueRecord>();
+  const segments = splitSegments(source);
+
+  // 이전 턴까지 확보한 단서를 먼저 깐다. 컨텍스트 창이 잘려도 진행이 사라지지 않는다.
+  for (const carried of previous) {
+    mergeClue(clues, carried);
+  }
 
   for (const seed of profile.clueSeeds) {
-    const status = inferClueStatus(source, seed.status);
+    const evidence = evidenceForClue(segments, seed);
+    // 근거 문장이 없으면 승격시키지 않는다.
+    const status = evidence ? inferClueStatus(evidence, seed.status) : seed.status;
     mergeClue(clues, { ...seed, status });
   }
 
@@ -379,14 +430,16 @@ function buildClueRecords(profile: RouteProfile, briefing: GameBriefing | undefi
     const title = clueItem.title.trim();
     if (!title) continue;
     const detail = clueItem.detail.trim() || title;
-    const status = inferClueStatus(`${clueItem.status}\n${title}\n${detail}\n${source}`, "noticed");
-    mergeClue(clues, {
+    const record: ClueRecord = {
       id: makeId(title),
       title,
       detail,
       source: clueItem.source.trim() || "Scene",
-      status,
-    });
+      status: "noticed",
+    };
+    // 브리핑이 직접 보고한 상태와 그 단서를 언급한 문장만 근거로 삼는다.
+    const evidence = `${clueItem.status}\n${title}\n${detail}\n${evidenceForClue(segments, record)}`;
+    mergeClue(clues, { ...record, status: inferClueStatus(evidence, "noticed") });
   }
 
   return Array.from(clues.values()).slice(0, 12);
@@ -421,8 +474,16 @@ function mergeNpc(target: Map<string, NpcRecord>, incoming: NpcRecord): void {
   });
 }
 
-function buildNpcRecords(profile: RouteProfile, briefing: GameBriefing | undefined): NpcRecord[] {
+function buildNpcRecords(
+  profile: RouteProfile,
+  briefing: GameBriefing | undefined,
+  previous: NpcRecord[] = [],
+): NpcRecord[] {
   const npcs = new Map<string, NpcRecord>();
+
+  for (const carried of previous) {
+    mergeNpc(npcs, carried);
+  }
 
   for (const seed of profile.npcSeeds) {
     mergeNpc(npcs, seed);
@@ -450,24 +511,39 @@ function buildNpcRecords(profile: RouteProfile, briefing: GameBriefing | undefin
   return Array.from(npcs.values()).slice(0, 10);
 }
 
+/** 단서가 실제 물증 단계에 도달했는지. contradicted는 모순 발견이므로 물증에 포함한다. */
+function hasEvidence(status: ClueStatus): boolean {
+  return status === "collected" || status === "contradicted" || status === "verified";
+}
+
 function evaluateGate(
   baseGate: Omit<DisclosureGate, "status">,
   clues: ClueRecord[],
-  source: string,
+  previousStatus?: DisclosureGate["status"],
 ): DisclosureGate {
   const clueById = new Map(clues.map((item) => [item.id, item]));
   const required = baseGate.requiredClues
     .map((id) => clueById.get(id))
     .filter((item): item is ClueRecord => Boolean(item));
-  const evidenceCount = required.filter((item) => STATUS_RANK[item.status] >= STATUS_RANK.collected).length;
-  const verifiedCount = required.filter((item) => STATUS_RANK[item.status] >= STATUS_RANK.contradicted).length;
-  const explicitUnlock = new RegExp(`${baseGate.label}|${baseGate.id}|unlocked|공개|해제`, "i").test(source)
-    && /검증|확인|verified|confirmed|unlocked|해제/i.test(source);
-  const status: DisclosureGate["status"] = explicitUnlock || (required.length > 0 && verifiedCount >= required.length)
+
+  // 이전에는 본문에 "공개"/"확인" 같은 흔한 단어가 있으면 게이트가 열렸다.
+  // 이 세계관 텍스트에는 두 단어가 상시 등장하므로 사실상 잠금이 없는 것과 같았다.
+  // 이제는 필요한 단서가 개별적으로 verified에 도달해야만 해제한다.
+  const allVerified = required.length === baseGate.requiredClues.length
+    && required.length > 0
+    && required.every((item) => item.status === "verified");
+  const anyEvidence = required.some((item) => hasEvidence(item.status));
+
+  const status: DisclosureGate["status"] = allVerified
     ? "unlocked"
-    : evidenceCount > 0 || verifiedCount > 0
+    : anyEvidence
       ? "hypothesis"
       : "locked";
+
+  // 한 번 해제된 게이트는 되잠기지 않는다.
+  if (previousStatus === "unlocked") {
+    return { ...baseGate, status: "unlocked" };
+  }
 
   return { ...baseGate, status };
 }
@@ -496,19 +572,54 @@ function inferRisk(source: string, phase: GameEngineState["caseState"]["phase"],
   return Math.min(95, Math.max(5, risk));
 }
 
+/**
+ * 현재 이력에서 루트를 판정하되, 신호가 사라졌으면 직전 루트를 유지한다.
+ *
+ * 서버는 컨텍스트 윈도를 잘라서 프롬프트를 만들기 때문에, 세션이 길어지면
+ * 루트를 알려주던 첫 메시지가 창 밖으로 밀려난다. 이때 매 턴 open-custom으로
+ * 떨어지면 사건 단계와 단서가 통째로 리셋된다.
+ */
+function resolveRouteProfile(source: string, previous?: GameEngineState): RouteProfile {
+  const matched = detectRouteProfile(source);
+  if (matched.id !== OPEN_PROFILE.id || !previous) return matched;
+  return ROUTE_PROFILES.find((profile) => profile.id === previous.caseState.id) ?? matched;
+}
+
+const PHASE_RANK: Record<GameEngineState["caseState"]["phase"], number> = {
+  intake: 0,
+  evidence: 1,
+  verification: 2,
+  reveal: 3,
+  aftermath: 4,
+};
+
 export function buildGameEngineState(
   response: Pick<GameResponse, "raw" | "narrative">,
   messages: ChatMessage[],
   briefing: GameBriefing | undefined,
   language: EngineLanguage,
+  previous?: GameEngineState,
 ): GameEngineState {
   const source = sourceFromMessages(messages, `${response.raw}\n${response.narrative}`);
-  const profile = detectRouteProfile(source);
-  const clues = buildClueRecords(profile, briefing, source);
+  const profile = resolveRouteProfile(source, previous);
+
+  // 루트가 바뀌었으면 이전 사건의 단서를 이어받지 않는다.
+  const carried = previous && previous.caseState.id === profile.id ? previous : undefined;
+
+  const clues = buildClueRecords(profile, briefing, source, carried?.clues);
   const disclosureLevel = inferDisclosureLevel(source);
-  const disclosureGates = profile.gates.map((item) => evaluateGate(item, clues, source));
+  const previousGateStatus = new Map(
+    (carried?.disclosureGates ?? []).map((item) => [item.id, item.status]),
+  );
+  const disclosureGates = profile.gates.map((item) =>
+    evaluateGate(item, clues, previousGateStatus.get(item.id)),
+  );
   const turn = countPlayerTurns(messages);
-  const phase = inferPhase(source, turn, disclosureGates, disclosureLevel);
+  const inferred = inferPhase(source, turn, disclosureGates, disclosureLevel);
+  // 단계는 되돌아가지 않는다. 컨텍스트가 잘려도 사건이 intake로 리셋되지 않도록.
+  const phase = carried && PHASE_RANK[carried.caseState.phase] > PHASE_RANK[inferred]
+    ? carried.caseState.phase
+    : inferred;
 
   return {
     caseState: {
@@ -524,14 +635,24 @@ export function buildGameEngineState(
       risk: inferRisk(source, phase, disclosureLevel),
     },
     clues,
-    npcs: buildNpcRecords(profile, briefing),
+    npcs: buildNpcRecords(profile, briefing, carried?.npcs),
     disclosureGates,
   };
 }
 
-export function buildGameEngineStateFromMessages(messages: ChatMessage[], language: EngineLanguage): GameEngineState {
+export function buildGameEngineStateFromMessages(
+  messages: ChatMessage[],
+  language: EngineLanguage,
+  previous?: GameEngineState,
+): GameEngineState {
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant")?.content ?? "";
-  return buildGameEngineState({ raw: lastAssistant, narrative: lastAssistant }, messages, undefined, language);
+  return buildGameEngineState(
+    { raw: lastAssistant, narrative: lastAssistant },
+    messages,
+    undefined,
+    language,
+    previous,
+  );
 }
 
 export function buildGameEngineInstructions(engine: GameEngineState, language: EngineLanguage): string {

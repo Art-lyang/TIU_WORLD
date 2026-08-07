@@ -9,7 +9,17 @@ import {
 } from "@/lib/prompts";
 import { checkForbidden } from "@/lib/constants";
 import { parseGameResponse } from "@/lib/parseResponse";
-import type { ApiUsageSnapshot, ChatMessage, GameResponse } from "@/types/game";
+import type {
+  ApiUsageSnapshot,
+  CasePhase,
+  ChatMessage,
+  ClueRecord,
+  ClueStatus,
+  GameEngineState,
+  GameResponse,
+  NpcRecord,
+  NpcRelation,
+} from "@/types/game";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/access";
 import { buildWorldIndexContext } from "@/lib/worldIndex";
 import {
@@ -18,6 +28,11 @@ import {
   buildGameEngineStateFromMessages,
   engineStateToBriefingLogs,
 } from "@/lib/gameEngine";
+import {
+  STARTER_ROUTES,
+  findRouteByStartToken,
+  findStarterRouteByIndex,
+} from "@/lib/routes";
 
 export const runtime = "nodejs";
 
@@ -113,6 +128,74 @@ function normalizeModelProfile(value: unknown): ModelProfile {
 
 function normalizeLanguage(value: unknown): ResponseLanguage {
   return value === "en" ? "en" : "ko";
+}
+
+const CLUE_STATUSES: ClueStatus[] = ["unseen", "noticed", "collected", "verified", "contradicted"];
+const NPC_RELATIONS: NpcRelation[] = ["unknown", "neutral", "helpful", "wary", "hostile"];
+const CASE_PHASES: CasePhase[] = ["intake", "evidence", "verification", "reveal", "aftermath"];
+
+/**
+ * 클라이언트가 보낸 직전 엔진 상태를 형태만 검증해서 받는다.
+ *
+ * 이 값을 받는 이유는 컨텍스트 윈도(MAX_CONTEXT_MESSAGES)가 잘리면 초반 단서가
+ * 이력에서 사라져 사건 진행이 통째로 리셋되기 때문이다. 단서 상태는 단조 증가로만
+ * 병합되므로 이전 상태를 이어받아도 진행이 뒤로 가지 않는다.
+ *
+ * 공개 게이트는 여기서 받지 않고 항상 단서에서 다시 계산한다.
+ */
+function normalizeEngineState(value: unknown): GameEngineState | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Partial<GameEngineState>;
+  const caseState = raw.caseState;
+  if (!caseState || typeof caseState !== "object" || typeof caseState.id !== "string") return undefined;
+
+  const clues = Array.isArray(raw.clues)
+    ? raw.clues
+        .filter((item): item is ClueRecord =>
+          Boolean(item) && typeof item === "object"
+          && typeof (item as ClueRecord).id === "string"
+          && typeof (item as ClueRecord).title === "string")
+        .map((item) => ({
+          id: item.id.slice(0, 80),
+          title: item.title.slice(0, 120),
+          detail: typeof item.detail === "string" ? item.detail.slice(0, 400) : "",
+          source: typeof item.source === "string" ? item.source.slice(0, 120) : "",
+          status: CLUE_STATUSES.includes(item.status) ? item.status : "noticed",
+        }))
+        .slice(0, 12)
+    : [];
+
+  const npcs = Array.isArray(raw.npcs)
+    ? raw.npcs
+        .filter((item): item is NpcRecord =>
+          Boolean(item) && typeof item === "object"
+          && typeof (item as NpcRecord).id === "string"
+          && typeof (item as NpcRecord).name === "string")
+        .map((item) => ({
+          id: item.id.slice(0, 80),
+          name: item.name.slice(0, 60),
+          role: typeof item.role === "string" ? item.role.slice(0, 120) : "",
+          emotion: typeof item.emotion === "string" ? item.emotion.slice(0, 40) : "평온",
+          relation: NPC_RELATIONS.includes(item.relation) ? item.relation : "neutral",
+          trust: Number.isFinite(item.trust) ? Math.min(100, Math.max(0, Math.round(item.trust))) : 40,
+          known: typeof item.known === "string" ? item.known.slice(0, 300) : "",
+          lastSeen: typeof item.lastSeen === "string" ? item.lastSeen.slice(0, 80) : "현재 장면",
+        }))
+        .slice(0, 10)
+    : [];
+
+  if (clues.length === 0 && npcs.length === 0) return undefined;
+
+  return {
+    caseState: {
+      ...caseState,
+      id: caseState.id.slice(0, 80),
+      phase: CASE_PHASES.includes(caseState.phase) ? caseState.phase : "intake",
+    } as GameEngineState["caseState"],
+    clues,
+    npcs,
+    disclosureGates: [],
+  };
 }
 
 function normalizePlayerAccountContext(value: unknown): PlayerAccountContext | null {
@@ -937,36 +1020,28 @@ function buildSessionAnchor(messages: ChatMessage[], language: ResponseLanguage)
 - 이 캐릭터와 최신 행동에서 이어간다. 무관한 시작 사건으로 재시작하지 않는다.`;
 }
 
-const STARTER_ROUTE_HINTS = [
-  {
-    pattern: /한국\s*방벽|민간\s*조사\s*보조원|KR_BARRIER_CIVIL_ASSISTANT/i,
-    label: "한국 방벽 내부 민간 조사 보조원",
-  },
-  {
-    pattern: /KR-?INIT-?001|잔여\s*문서|기록\s*관리자|KR_INIT_001_RECORDS/i,
-    label: "KR-INIT-001 잔여 문서 기록 관리자",
-  },
-  {
-    pattern: /L3|남극|거대공동|극지|현장\s*파견|계약\s*분석관|L3_FIELD_ANALYST/i,
-    label: "남극 거대공동 현장 파견 계약 분석관",
-  },
-] as const;
-
 function isStarterRouteCommand(input: string): boolean {
   const trimmed = input.trim();
   if (/^START_ROUTE:/i.test(trimmed)) return true;
-  if (/^[1-3](?:[.)])?$/.test(trimmed)) return true;
-  return STARTER_ROUTE_HINTS.some((hint) => trimmed === hint.label);
+  if (new RegExp(`^[1-${STARTER_ROUTES.length}](?:[.)])?$`).test(trimmed)) return true;
+  return STARTER_ROUTES.some((route) => trimmed === route.label.ko);
 }
 
 function detectStarterRoute(input: string): string | null {
-  const numericRoute = input.trim().match(/^([1-4])(?:[.)])?$/)?.[1];
-  if (numericRoute === "1") return "한국 방벽 내부 민간 조사 보조원";
-  if (numericRoute === "2") return "KR-INIT-001 잔여 문서 기록 관리자";
-  if (numericRoute === "3") return "남극 거대공동 현장 파견 계약 분석관";
+  const trimmed = input.trim();
 
-  const route = STARTER_ROUTE_HINTS.find((hint) => hint.pattern.test(input));
-  return route?.label ?? null;
+  // 자유 캐릭터 번호(FREE_CHARACTER_INDEX)는 루트가 아니므로 여기서 잡지 않는다.
+  const numeric = Number(trimmed.match(/^(\d+)(?:[.)])?$/)?.[1] ?? NaN);
+  if (Number.isFinite(numeric)) {
+    return findStarterRouteByIndex(numeric)?.label.ko ?? null;
+  }
+
+  if (/^START_ROUTE:/i.test(trimmed)) {
+    const byToken = findRouteByStartToken(trimmed);
+    if (byToken) return byToken.label.ko;
+  }
+
+  return STARTER_ROUTES.find((route) => route.pattern.test(input))?.label.ko ?? null;
 }
 
 const PLAYER_ACCOUNT_NAME_PLACEHOLDER = "{user}";
@@ -1862,10 +1937,16 @@ function applyConversationalLayer(response: GameResponse, messages: ChatMessage[
   };
 }
 
-function withBriefing(response: GameResponse, messages: ChatMessage[], language: ResponseLanguage = "ko"): GameResponse {
+function withBriefing(
+  response: GameResponse,
+  messages: ChatMessage[],
+  language: ResponseLanguage = "ko",
+  // 시작 장면 생성 경로에서는 이어받을 상태가 없으므로 생략한다.
+  previousEngine?: GameEngineState,
+): GameResponse {
   const conversationalResponse = applyConversationalLayer(response, messages, language);
   const briefing = buildBriefing(conversationalResponse, messages, language) as NonNullable<GameResponse["briefing"]>;
-  const engine = buildGameEngineState(conversationalResponse, messages, briefing, language);
+  const engine = buildGameEngineState(conversationalResponse, messages, briefing, language, previousEngine);
   const engineLogs = engineStateToBriefingLogs(engine, language);
   const memory_updates = Array.from(
     new Set([
@@ -2601,6 +2682,7 @@ export async function POST(req: Request) {
     playerAccount?: PlayerAccountContext;
     language?: ResponseLanguage;
     maxOutputTokens?: number;
+    engine?: unknown;
     continueFrom?: {
       narrative?: string;
       raw?: string;
@@ -2623,6 +2705,7 @@ export async function POST(req: Request) {
   const modelProfile = normalizeModelProfile(body.modelProfile);
   const language = normalizeLanguage(body.language);
   const playerAccount = normalizePlayerAccountContext(body.playerAccount);
+  const previousEngine = normalizeEngineState(body.engine);
   const selectedModel = selectModel(modelProfile);
   const maxOutputTokens = normalizeOutputTokens(body.maxOutputTokens);
   const continueFrom = body.continueFrom && typeof body.continueFrom === "object"
@@ -2811,7 +2894,7 @@ ${SESSION_CONTINUITY_RULE}`;
 ${worldIndexContext}`
       : "";
     const gameEngineContext = buildGameEngineInstructions(
-      buildGameEngineStateFromMessages(contextMessages, language),
+      buildGameEngineStateFromMessages(contextMessages, language, previousEngine),
       language,
     );
     const gameEngineInstructions = `
@@ -2935,7 +3018,7 @@ The next answer is a readable continuation of a truncated assistant response. It
     }
 
     const parsed = parseGameResponse(text);
-    const gameResponse = withBriefing(parsed, contextMessages, language);
+    const gameResponse = withBriefing(parsed, contextMessages, language, previousEngine);
     gameResponse.truncated = generated.truncated;
     gameResponse.usage = await recordApiUsageSuccess({
       requestCount: usageResponses.length,

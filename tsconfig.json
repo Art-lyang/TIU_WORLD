@@ -9,6 +9,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // scripts/qa-engine.mjs가 Node 타입 스트리핑으로 src/lib/*.ts를 직접 불러온다.
+    // Node의 ESM 해석은 확장자를 요구하므로 .ts를 명시한 import를 허용한다.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

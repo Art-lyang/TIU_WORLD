@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern next-env.d.ts --ignore-pattern .next",
     "world:index": "node scripts/build-world-index.mjs",
     "world:status": "node scripts/world-index-status.mjs",
+    "qa:engine": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-engine.mjs",
     "qa:smoke": "node scripts/qa-smoke.mjs",
     "qa:regression": "node scripts/qa-regression.mjs",
     "qa:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/qa-local.ps1"

@@ -3,10 +3,23 @@
 import Image from "next/image";
 import { useState, useRef, useEffect, FormEvent } from "react";
 import type { ApiUsageSnapshot, ChatMessage, GameResponse } from "@/types/game";
+import { ROUTE_DEFINITIONS, type RouteId } from "@/lib/routes";
 
 type Turn =
   | { role: "user"; content: string; apiContent?: string; hidden?: boolean }
   | { role: "assistant"; response: GameResponse };
+
+/**
+ * 가장 최근 어시스턴트 턴이 들고 있는 규칙 엔진 상태.
+ * 서버 컨텍스트 윈도가 잘려도 단서/인물 진행이 이어지도록 요청에 함께 보낸다.
+ */
+function latestEngineState(turns: Turn[]): GameResponse["engine"] | undefined {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (turn.role === "assistant" && turn.response.engine) return turn.response.engine;
+  }
+  return undefined;
+}
 
 type SessionInfoTab =
   | "menu"
@@ -1075,8 +1088,11 @@ const FEEDBACK_TEXT: Record<Language, {
 const ASSET_BASE = "/assets/tiu";
 const INTRO_ASSET_BASE = "/assets/intro";
 
+// 루트 식별(id / START_ROUTE 토큰 / 라벨 / 탐지 패턴)은 src/lib/routes.ts가 단일 출처다.
+// 여기 남는 건 표현 정보(후킹 문구, 이미지, 색상)뿐이고 routeId로 연결한다.
 const STARTER_ROUTES = [
   {
+    routeId: "korean-barrier" as RouteId,
     title: "한국 방벽 내부",
     role: "민간 조사 보조원",
     tone: "생활 / 봉쇄 / 주민 신고",
@@ -1090,6 +1106,7 @@ const STARTER_ROUTES = [
     signal: "COASTAL DEFENSE BARRIER",
   },
   {
+    routeId: "kr-init-001" as RouteId,
     title: "KR-INIT-001",
     role: "잔여 문서 기록 관리자",
     tone: "문서 / 삭제 로그 / 은폐",
@@ -1103,6 +1120,7 @@ const STARTER_ROUTES = [
     signal: "ORACLE NODE-04",
   },
   {
+    routeId: "antarctic-hollow" as RouteId,
     title: "남극 거대공동 현장 파견",
     role: "계약 분석관",
     tone: "극지 현장 / 지도 오류 / 격리",
@@ -1116,6 +1134,16 @@ const STARTER_ROUTES = [
     signal: "ANTARCTIC FIELD ANOMALY",
   },
 ] as const;
+
+// 카드와 레지스트리가 어긋나면 시작 버튼이 엉뚱한 루트로 흘러가므로 개발 중에 알린다.
+if (process.env.NODE_ENV !== "production") {
+  for (const card of STARTER_ROUTES) {
+    const definition = ROUTE_DEFINITIONS.find((route) => route.id === card.routeId);
+    if (!definition || `START_ROUTE:${definition.startToken}` !== card.prompt) {
+      console.warn(`[routes] 시작 카드 "${card.routeId}"가 src/lib/routes.ts와 어긋나 있습니다.`);
+    }
+  }
+}
 
 const CHARACTER_EXAMPLES = [
   "이름: 정아랑 / 나이: 29 / 직업(소속): 마이더스손 괴담 조사 기자 / 소지품: 녹음기, 취재수첩, 방수 손전등",
@@ -3743,6 +3771,8 @@ export default function Home() {
           modelProfile,
           language,
           maxOutputTokens: normalizeTokenValue(outputTokens),
+          // 컨텍스트 윈도가 잘려도 단서/인물 진행이 리셋되지 않도록 직전 상태를 넘긴다.
+          engine: latestEngineState(nextTurns),
         }),
       });
 
@@ -3799,6 +3829,7 @@ export default function Home() {
           modelProfile,
           language,
           maxOutputTokens: normalizeTokenValue(outputTokens),
+          engine: latestEngineState(turns),
           continueFrom: {
             narrative: response.narrative,
             raw: response.raw,
