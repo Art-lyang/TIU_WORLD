@@ -103,6 +103,12 @@ For faster and more accurate world recognition, build a compact local index from
 npm run world:index
 ```
 
+Check what the game is currently using:
+
+```bash
+npm run world:status
+```
+
 The script reads `TIU_OBSIDIAN_VAULT_DIR` from `.env.local`. You can also pass the path directly:
 
 ```bash
@@ -112,6 +118,8 @@ npm run world:index -- --vault "K:\업무\4. 개인업무\만든거 html 등\TIU
 This creates `world/index/world-index.local.json`. The file is ignored by Git because it may contain private worldbuilding material. During chat, the AI-GM loads only a few relevant snippets from this compact index, not the whole Vault, so response speed stays stable.
 
 Private files are excluded by default. For local-only testing, `npm run world:index -- --include-private` can include them, but disclosure rules still control whether those facts can appear in player-facing output.
+
+Admin users can also check `Menu -> Ops Check -> World Index` in the app. It shows whether a local or deployed index is loaded, when it was generated, how many Markdown files were indexed, and how many public/restricted/private snippets are available.
 
 ## Scene Images
 

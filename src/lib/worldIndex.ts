@@ -18,7 +18,10 @@ type WorldIndexEntry = {
 type WorldIndexFile = {
   format: "tiu-world-index-v1";
   generatedAt: string;
+  sourceRootName?: string;
+  sourceFileCount?: number;
   entryCount: number;
+  includePrivate?: boolean;
   entries: WorldIndexEntry[];
 };
 
@@ -65,6 +68,50 @@ const MAX_WORLD_CONTEXT_CHARS = 1400;
 
 let cache: CacheState | null = null;
 
+export type WorldIndexStatus = {
+  loaded: boolean;
+  source: "local" | "public" | null;
+  fileName: string | null;
+  filePath: string | null;
+  generatedAt: string | null;
+  sourceRootName: string | null;
+  sourceFileCount: number;
+  entryCount: number;
+  includePrivate: boolean;
+  sizeBytes: number;
+  mtime: string | null;
+  tiers: {
+    public: number;
+    restricted: number;
+    private: number;
+  };
+};
+
+function emptyWorldIndexStatus(): WorldIndexStatus {
+  return {
+    loaded: false,
+    source: null,
+    fileName: null,
+    filePath: null,
+    generatedAt: null,
+    sourceRootName: null,
+    sourceFileCount: 0,
+    entryCount: 0,
+    includePrivate: false,
+    sizeBytes: 0,
+    mtime: null,
+    tiers: {
+      public: 0,
+      restricted: 0,
+      private: 0,
+    },
+  };
+}
+
+function stripJsonBom(raw: string): string {
+  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+}
+
 function readIndexFile(): { filePath: string; index: WorldIndexFile; mtimeMs: number } | null {
   for (const filePath of INDEX_CANDIDATES) {
     try {
@@ -73,7 +120,7 @@ function readIndexFile(): { filePath: string; index: WorldIndexFile; mtimeMs: nu
         return cache;
       }
       const raw = fs.readFileSync(filePath, "utf8");
-      const parsed = JSON.parse(raw) as WorldIndexFile;
+      const parsed = JSON.parse(stripJsonBom(raw)) as WorldIndexFile;
       if (parsed?.format !== "tiu-world-index-v1" || !Array.isArray(parsed.entries)) continue;
       cache = { filePath, mtimeMs: stat.mtimeMs, index: parsed };
       return cache;
@@ -82,6 +129,46 @@ function readIndexFile(): { filePath: string; index: WorldIndexFile; mtimeMs: nu
     }
   }
   return null;
+}
+
+export function getWorldIndexStatus(): WorldIndexStatus {
+  for (const filePath of INDEX_CANDIDATES) {
+    try {
+      const stat = fs.statSync(filePath);
+      const raw = fs.readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(stripJsonBom(raw)) as WorldIndexFile;
+      if (parsed?.format !== "tiu-world-index-v1" || !Array.isArray(parsed.entries)) continue;
+
+      const tiers = parsed.entries.reduce(
+        (acc, entry) => {
+          if (entry.tier === "restricted") acc.restricted += 1;
+          else if (entry.tier === "private") acc.private += 1;
+          else acc.public += 1;
+          return acc;
+        },
+        { public: 0, restricted: 0, private: 0 },
+      );
+
+      return {
+        loaded: true,
+        source: filePath.endsWith(".local.json") ? "local" : "public",
+        fileName: path.basename(filePath),
+        filePath,
+        generatedAt: parsed.generatedAt ?? null,
+        sourceRootName: parsed.sourceRootName ?? null,
+        sourceFileCount: parsed.sourceFileCount ?? 0,
+        entryCount: parsed.entryCount ?? parsed.entries.length,
+        includePrivate: Boolean(parsed.includePrivate),
+        sizeBytes: stat.size,
+        mtime: new Date(stat.mtimeMs).toISOString(),
+        tiers,
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return emptyWorldIndexStatus();
 }
 
 function tokenize(text: string): string[] {

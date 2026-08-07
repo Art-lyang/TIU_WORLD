@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { ACCESS_COOKIE, isAccessEnabled, verifyAccessToken } from "@/lib/access";
 import { ACCOUNT_COOKIE, verifyAccountToken } from "@/lib/account";
 import { getCloudStorageStatus } from "@/lib/cloudStorage";
+import { getWorldIndexStatus } from "@/lib/worldIndex";
 
 export const runtime = "nodejs";
 
@@ -175,6 +176,7 @@ export async function GET(req: Request) {
       },
     },
     cloudStorage: getCloudStorageStatus(),
+    worldIndex: getWorldIndexStatus(),
     assets: {
       userSceneImageFiles: imageFiles,
       manifestItems: countArray((manifest as { items?: unknown[] } | null)?.items),

@@ -168,6 +168,24 @@ type AdminDiagnostics = {
     tokenConfigured: boolean;
     mode: "disabled" | "ready" | "misconfigured";
   };
+  worldIndex?: {
+    loaded: boolean;
+    source: "local" | "public" | null;
+    fileName: string | null;
+    filePath: string | null;
+    generatedAt: string | null;
+    sourceRootName: string | null;
+    sourceFileCount: number;
+    entryCount: number;
+    includePrivate: boolean;
+    sizeBytes: number;
+    mtime: string | null;
+    tiers: {
+      public: number;
+      restricted: number;
+      private: number;
+    };
+  };
   assets: {
     userSceneImageFiles: number;
     manifestItems: number;
@@ -819,6 +837,17 @@ const ADMIN_TEXT: Record<Language, {
   cloudMisconfigured: string;
   cloudEndpoint: string;
   cloudToken: string;
+  worldIndex: string;
+  worldIndexSource: string;
+  worldIndexFile: string;
+  worldIndexEntries: string;
+  worldIndexFiles: string;
+  worldIndexGenerated: string;
+  worldIndexTiers: string;
+  localIndex: string;
+  publicIndex: string;
+  privateIncluded: string;
+  privateExcluded: string;
   currentSession: string;
   savedSessions: string;
   reviewPending: string;
@@ -867,6 +896,17 @@ const ADMIN_TEXT: Record<Language, {
     cloudMisconfigured: "설정 필요",
     cloudEndpoint: "엔드포인트",
     cloudToken: "토큰",
+    worldIndex: "세계관 색인",
+    worldIndexSource: "색인 종류",
+    worldIndexFile: "색인 파일",
+    worldIndexEntries: "검색 조각",
+    worldIndexFiles: "원본 MD",
+    worldIndexGenerated: "생성 시각",
+    worldIndexTiers: "공개/제한/비공개",
+    localIndex: "로컬 색인",
+    publicIndex: "배포 색인",
+    privateIncluded: "비공개 포함",
+    privateExcluded: "비공개 제외",
     currentSession: "현재 세션",
     savedSessions: "저장 슬롯",
     reviewPending: "검토 대기",
@@ -915,6 +955,17 @@ const ADMIN_TEXT: Record<Language, {
     cloudMisconfigured: "Needs setup",
     cloudEndpoint: "Endpoint",
     cloudToken: "Token",
+    worldIndex: "World Index",
+    worldIndexSource: "Index source",
+    worldIndexFile: "Index file",
+    worldIndexEntries: "Snippets",
+    worldIndexFiles: "Source MD files",
+    worldIndexGenerated: "Generated",
+    worldIndexTiers: "Public/restricted/private",
+    localIndex: "Local index",
+    publicIndex: "Deploy index",
+    privateIncluded: "Private included",
+    privateExcluded: "Private excluded",
     currentSession: "Current session",
     savedSessions: "Saved slots",
     reviewPending: "Review pending",
@@ -4496,7 +4547,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-md border border-zinc-800 bg-zinc-900/55 p-3">
                         <div className="mb-2 text-xs font-semibold text-zinc-200">{adminText.storage}</div>
                         <div className="space-y-1 text-[11px] text-zinc-400">
@@ -4515,6 +4566,30 @@ export default function Home() {
                           <div>{adminText.imageFiles}: {formatUsageNumber(adminDiagnostics.assets.userSceneImageFiles, language)}</div>
                           <div>{adminText.manifestItems}: {formatUsageNumber(adminDiagnostics.assets.manifestItems, language)}</div>
                           <div>manifest.json: {adminDiagnostics.assets.manifestPresent ? adminText.yes : adminText.no}</div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border border-zinc-800 bg-zinc-900/55 p-3">
+                        <div className="mb-2 text-xs font-semibold text-zinc-200">{adminText.worldIndex}</div>
+                        <div className="space-y-1 text-[11px] text-zinc-400">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{adminText.worldIndexSource}</span>
+                            <span className={`rounded border px-1.5 py-0.5 ${adminDiagnostics.worldIndex?.loaded ? "border-emerald-400/30 bg-emerald-950/20 text-emerald-100" : "border-amber-400/30 bg-amber-950/20 text-amber-100"}`}>
+                              {adminDiagnostics.worldIndex?.loaded
+                                ? adminDiagnostics.worldIndex.source === "local"
+                                  ? adminText.localIndex
+                                  : adminText.publicIndex
+                                : adminText.missing}
+                            </span>
+                          </div>
+                          <div>{adminText.worldIndexEntries}: {formatUsageNumber(adminDiagnostics.worldIndex?.entryCount ?? 0, language)}</div>
+                          <div>{adminText.worldIndexFiles}: {formatUsageNumber(adminDiagnostics.worldIndex?.sourceFileCount ?? 0, language)}</div>
+                          <div>{adminText.worldIndexFile}: {adminDiagnostics.worldIndex?.fileName ?? "-"}</div>
+                          <div>{adminText.worldIndexTiers}: {formatUsageNumber(adminDiagnostics.worldIndex?.tiers.public ?? 0, language)} / {formatUsageNumber(adminDiagnostics.worldIndex?.tiers.restricted ?? 0, language)} / {formatUsageNumber(adminDiagnostics.worldIndex?.tiers.private ?? 0, language)}</div>
+                          <div>{adminDiagnostics.worldIndex?.includePrivate ? adminText.privateIncluded : adminText.privateExcluded}</div>
+                          {adminDiagnostics.worldIndex?.generatedAt && (
+                            <div>{adminText.worldIndexGenerated}: {formatSavedAt(adminDiagnostics.worldIndex.generatedAt, language)}</div>
+                          )}
                         </div>
                       </div>
 

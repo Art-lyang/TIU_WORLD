@@ -99,6 +99,7 @@ async function main() {
   const diagnostics = await jar.json("/api/admin/diagnostics");
   assert(diagnostics.response.ok, `Admin diagnostics failed: HTTP ${diagnostics.response.status}`);
   assert(diagnostics.data?.cloudStorage?.mode, "Admin diagnostics did not include cloudStorage status.");
+  assert(typeof diagnostics.data?.worldIndex?.loaded === "boolean", "Admin diagnostics did not include worldIndex status.");
   assert(!JSON.stringify(diagnostics.data).includes(env.OPENAI_API_KEY || "__no_key__"), "Diagnostics leaked OPENAI_API_KEY.");
 
   const routeStart = await jar.json("/api/chat", asJsonPost({
@@ -120,6 +121,7 @@ async function main() {
     baseUrl: BASE_URL,
     sceneImages: assets.data.count,
     cloudStorage: diagnostics.data.cloudStorage.mode,
+    worldIndex: diagnostics.data.worldIndex.loaded ? diagnostics.data.worldIndex.source : "missing",
     starterChoices: routeStart.data.choices.length,
   }, null, 2));
 }
